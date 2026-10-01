@@ -1,0 +1,6 @@
+{
+  "name": "KPCIA 프레스티지 강사 협회",
+  "description": "한국 프레스티지 기업 강사 협회(KPCIA) 공식 포털 및 회원용 출강 매칭 모바일 앱 시스템",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

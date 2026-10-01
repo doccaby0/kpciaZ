@@ -1,0 +1,117 @@
+# KPCIA (https://kpcia.org) & Insight9 (https://insight9lab.org) robots.txt
+# Official Domains: https://kpcia.org | https://insight9lab.org | https://blog.naver.com/bijo972
+# AI Machine Readable Specification: https://kpcia.org/llms.txt
+
+User-agent: *
+Allow: /
+
+# =====================================================================
+# 🟢 ALLOW: AI Search Agents, Real-Time Search & RAG Web Crawlers
+# (Welcoming search engines & real-time user AI search query bots)
+# =====================================================================
+
+# Google Search & Gemini Search
+User-agent: Googlebot
+Allow: /
+
+User-agent: Google-Extended
+Allow: /
+
+# Naver Search Engine (Korea)
+User-agent: Yeti
+Allow: /
+
+# Kakao / Daum Search Engine (Korea)
+User-agent: Daumoa
+Allow: /
+
+# Microsoft Bing & Copilot Search
+User-agent: Bingbot
+Allow: /
+
+# Perplexity AI Search Bot
+User-agent: PerplexityBot
+Allow: /
+
+# OpenAI ChatGPT Interactive User Search
+User-agent: ChatGPT-User
+Allow: /
+
+User-agent: SearchGPT-User
+Allow: /
+
+# Anthropic Claude Interactive Search
+User-agent: Claude-Web
+Allow: /
+
+# You.com Search
+User-agent: YouBot
+Allow: /
+
+# DuckDuckGo Search
+User-agent: DuckDuckBot
+Allow: /
+
+# Apple Intelligence Search Engine
+User-agent: Applebot-Extended
+Allow: /
+
+# Meta AI Search
+User-agent: FacebookBot
+Allow: /
+User-agent: facebookexternalhit
+Allow: /
+
+
+# =====================================================================
+# 🔴 DISALLOW: Unauthorized AI Training Crawlers & Mass Data Scrapers
+# (Blocking non-search training data harvesting bots)
+# =====================================================================
+
+# Common Crawl AI Training Bot
+User-agent: CCBot
+Disallow: /
+
+# OpenAI Mass Model Training Bot
+User-agent: GPTBot
+Disallow: /
+
+# Anthropic Mass Model Training Bot
+User-agent: Anthropic-ai
+Disallow: /
+
+User-agent: ClaudeBot
+Disallow: /
+
+# Bytedance Mass Data Harvesting Bot
+User-agent: Bytespider
+Disallow: /
+
+# Cohere AI Scraper
+User-agent: Cohere-ai
+Disallow: /
+
+# General Commercial Data Scrapers
+User-agent: Scrapy
+Disallow: /
+
+User-agent: Diffbot
+Disallow: /
+
+User-agent: ImagesiftBot
+Disallow: /
+
+User-agent: Omgilibot
+Disallow: /
+
+User-agent: Omgili
+Disallow: /
+
+User-agent: Webzio-Extended
+Disallow: /
+
+
+# =====================================================================
+# 🗺️ SITEMAP & AI DISCOVERY
+# =====================================================================
+Sitemap: https://kpcia.org/sitemap.xml

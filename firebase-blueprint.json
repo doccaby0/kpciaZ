@@ -1,0 +1,123 @@
+{
+  "entities": {
+    "User": {
+      "title": "User Profile",
+      "description": "Instructor profiles containing user tier, mileage, name, badging, and profile card details.",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string" },
+        "email": { "type": "string" },
+        "name": { "type": "string" },
+        "tier": { "type": "string", "enum": ["Prestige Member", "Prestige Associate", "Prestige Professional", "Prestige Master", "Prestige Elite"] },
+        "mileage": { "type": "integer" },
+        "profileCard": {
+          "type": "object",
+          "properties": {
+            "title": { "type": "string" },
+            "bio": { "type": "string" },
+            "specialties": { "type": "array" },
+            "career": { "type": "array" },
+            "imageUrl": { "type": "string" },
+            "pdfUrl": { "type": "string" }
+          }
+        },
+        "badges": { "type": "array" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["uid", "email", "name", "tier", "mileage"]
+    },
+    "Lecture": {
+      "title": "Lecture Request",
+      "description": "Lecture requests posted by admin.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "title": { "type": "string" },
+        "description": { "type": "string" },
+        "targetTier": { "type": "string" },
+        "budget": { "type": "integer" },
+        "mileageRoyalty": { "type": "integer" },
+        "programId": { "type": "string" },
+        "date": { "type": "string" },
+        "duration": { "type": "string" },
+        "location": { "type": "string" },
+        "status": { "type": "string", "enum": ["open", "assigned", "completed"] },
+        "assignedTo": { "type": "string" },
+        "assignedName": { "type": "string" },
+        "applicants": { "type": "array" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "title", "targetTier", "status"]
+    },
+    "Program": {
+      "title": "Educational Program",
+      "description": "Programs developed by the association or members.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "title": { "type": "string" },
+        "description": { "type": "string" },
+        "authorId": { "type": "string" },
+        "authorName": { "type": "string" },
+        "royaltyRate": { "type": "integer" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "title", "authorId", "authorName"]
+    },
+    "Transaction": {
+      "title": "Mileage Transaction",
+      "description": "Records of mileage transfers, royalty payments, and payouts.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "userId": { "type": "string" },
+        "type": { "type": "string", "enum": ["royalty", "admin_adjust", "lecture_payout"] },
+        "amount": { "type": "integer" },
+        "description": { "type": "string" },
+        "relatedId": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "userId", "type", "amount", "createdAt"]
+    },
+    "Proposal": {
+      "title": "Partnership Proposal",
+      "description": "Corporate partnership proposals submitted by companies or external clients.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "companyName": { "type": "string" },
+        "proposerName": { "type": "string" },
+        "email": { "type": "string" },
+        "phone": { "type": "string" },
+        "title": { "type": "string" },
+        "content": { "type": "string" },
+        "status": { "type": "string", "enum": ["pending", "reviewed", "accepted", "declined"] },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "companyName", "proposerName", "email", "phone", "title", "content", "status", "createdAt"]
+    }
+  },
+  "firestore": {
+    "users/{userId}": {
+      "schema": "User",
+      "description": "User profiles and credentials"
+    },
+    "lectures/{lectureId}": {
+      "schema": "Lecture",
+      "description": "Lecture requests and assignments"
+    },
+    "programs/{programId}": {
+      "schema": "Program",
+      "description": "Program assets and owner information"
+    },
+    "transactions/{transactionId}": {
+      "schema": "Transaction",
+      "description": "Mileage transactions"
+    },
+    "proposals/{proposalId}": {
+      "schema": "Proposal",
+      "description": "Corporate partnership proposals"
+    }
+  }
+}
