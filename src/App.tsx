@@ -3555,45 +3555,6 @@ export default function App() {
               </div>
             </div>
 
-            {/* 🌟 Tier-based Visibility Notice Banner */}
-            <div className="bg-gradient-to-r from-amber-500/10 via-amber-500/5 to-transparent border border-amber-500/25 rounded-2xl p-3 sm:px-4 sm:py-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 text-xs text-amber-200 shadow-sm">
-              <div className="flex items-center gap-2.5">
-                <span className="p-1 rounded-lg bg-amber-500/20 text-[#D4AF37] shrink-0 text-sm">🎖️</span>
-                <span className="leading-snug text-neutral-200">
-                  {!currentUser ? (
-                    <>
-                      <strong className="text-amber-300 font-extrabold">출강정보센터 안내</strong>: 비회원/게스트는 전체 출강 요청 요강을 자유롭게 열람하실 수 있으며, 실제 출강 매칭 신청은 <strong>강사 로그인(회원가입)</strong> 후 가능합니다. 로그인 시 소속 등급에 따른 맞춤형 권한이 적용됩니다.
-                    </>
-                  ) : (
-                    <>
-                      <strong className="text-amber-300 font-extrabold">등급별 출강 정보 열람 시스템</strong>: 강사님의 자격 등급({currentUser.tier})에 따라 <strong>해당 등급 및 하위 등급의 모든 출강 정보</strong>가 전체 공개되며, <strong>상위 등급 공고는 의뢰 기업명만 공개되고 세부 정보는 블러 처리</strong>됩니다.
-                    </>
-                  )}
-                </span>
-              </div>
-              <div className="flex items-center gap-2 shrink-0">
-                {!currentUser ? (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setAuthMode('login');
-                      setShowAuthModal(true);
-                    }}
-                    className="px-3 py-1.5 rounded-lg bg-gradient-to-r from-amber-600 to-[#D4AF37] text-neutral-950 font-black text-xs cursor-pointer shadow-md hover:brightness-110 transition-all flex items-center gap-1"
-                  >
-                    <LogIn className="w-3.5 h-3.5" />
-                    <span>강사 로그인</span>
-                  </button>
-                ) : (
-                  <div className="flex items-center gap-1.5">
-                    <span className="text-[11px] text-[#D4AF37] font-bold bg-[#D4AF37]/10 px-2 py-0.5 rounded border border-[#D4AF37]/20">
-                      내 등급: {currentUser.tier}
-                    </span>
-                  </div>
-                )}
-              </div>
-            </div>
-
             {/* Dynamic Lecture Counts Stat Bar */}
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3" id="lecture-notices-stats">
               <button
