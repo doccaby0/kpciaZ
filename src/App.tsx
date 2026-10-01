@@ -605,6 +605,14 @@ export default function App() {
     }
   }, [newLecStartTime, newLecEndTime]);
 
+  // Ensure login ID and password fields are strictly blank when opening login modal
+  useEffect(() => {
+    if (showAuthModal && authMode === 'login') {
+      setLoginId('');
+      setLoginPw('');
+    }
+  }, [showAuthModal, authMode]);
+
   const handleHoursMinsChange = (h: number, m: number) => {
     const safeH = Math.max(0, h);
     const safeM = Math.max(0, Math.min(59, m));
@@ -8215,7 +8223,11 @@ export default function App() {
                 <span className="text-[8px] text-[#D4AF37] border border-[#D4AF37]/20 bg-[#D4AF37]/5 px-1 rounded ml-1.5 font-bold uppercase tracking-wider">PORTAL</span>
               </div>
               <button 
-                onClick={() => setShowAuthModal(false)}
+                onClick={() => {
+                  setShowAuthModal(false);
+                  setLoginId('');
+                  setLoginPw('');
+                }}
                 className="text-neutral-400 hover:text-neutral-200 transition-colors cursor-pointer"
               >
                 <X className="w-4 h-4" />
@@ -8225,7 +8237,11 @@ export default function App() {
             {/* Modal Selector */}
             <div className="grid grid-cols-2 border-b border-neutral-800 text-xs">
               <button
-                onClick={() => setAuthMode('login')}
+                onClick={() => {
+                  setAuthMode('login');
+                  setLoginId('');
+                  setLoginPw('');
+                }}
                 className={`py-3 font-bold text-center transition-colors cursor-pointer ${
                   authMode === 'login' 
                     ? 'border-b-2 border-[#D4AF37] text-white bg-neutral-950/30' 
@@ -8251,11 +8267,13 @@ export default function App() {
               
               {/* Mode A: Login */}
               {authMode === 'login' && (
-                <form onSubmit={handleLogin} className="space-y-4">
+                <form onSubmit={handleLogin} autoComplete="off" className="space-y-4">
                   <div className="space-y-1">
                     <label className="text-neutral-400 font-semibold block">로그인 아이디 (Login ID)</label>
                     <input
                       type="text"
+                      name="kpcia_user_id_field"
+                      autoComplete="off"
                       placeholder="아이디를 입력해 주세요"
                       value={loginId}
                       onChange={(e) => setLoginId(e.target.value)}
@@ -8268,6 +8286,8 @@ export default function App() {
                     <label className="text-neutral-400 font-semibold block">비밀번호 (Password)</label>
                     <input
                       type="password"
+                      name="kpcia_user_pw_field"
+                      autoComplete="new-password"
                       placeholder="비밀번호를 입력해 주세요"
                       value={loginPw}
                       onChange={(e) => setLoginPw(e.target.value)}
