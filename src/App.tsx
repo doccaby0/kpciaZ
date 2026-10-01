@@ -314,15 +314,16 @@ export default function App() {
 
   // Memoized: Main filtered and sorted lectures for list rendering
   const filteredAndSortedLectures = React.useMemo(() => {
-    const userRank = currentUser ? getTierRank(currentUser.tier) : 1;
+    // Registered members get rank 1-6; guests get rank 0
+    const userRank = currentUser ? getTierRank(currentUser.tier) : 0;
     const isAdmin = Boolean(currentUser?.isAdmin);
 
     return lectures
       .filter(l => {
         const queryText = searchLecture.toLowerCase().trim();
         const targetRank = getTierRank(l.targetTier);
-        // Tier restriction applies to logged-in members whose rank is below the target tier
-        const isRestricted = Boolean(currentUser && !isAdmin && (userRank < targetRank));
+        // Restrict if not admin and lecture target tier is higher than member's rank
+        const isRestricted = !isAdmin && (userRank < targetRank);
 
         // For restricted lectures, only companyName is publicly searchable
         const titleMatch = !queryText 
@@ -335,11 +336,11 @@ export default function App() {
         if (filterLecTier === 'all') {
           tierMatch = true;
         } else if (filterLecTier === 'my_tier') {
-          // Can view full details: user's tier is equal or higher, or guest browsing
-          tierMatch = !currentUser || isAdmin || (userRank >= targetRank);
+          // Can view full details: user's tier is equal or higher
+          tierMatch = isAdmin || (userRank >= targetRank && userRank > 0);
         } else if (filterLecTier === 'restricted') {
-          // Higher tier than logged-in user
-          tierMatch = Boolean(currentUser && !isAdmin && (userRank < targetRank));
+          // Higher tier than logged-in user (blurred notices)
+          tierMatch = !isAdmin && (userRank < targetRank);
         } else {
           tierMatch = l.targetTier === filterLecTier;
         }
@@ -3738,9 +3739,9 @@ export default function App() {
                   onChange={(e) => setFilterLecTier(e.target.value)}
                   className="w-full bg-neutral-900 border border-neutral-800 rounded-xl px-4 py-3 text-xs text-neutral-300 focus:outline-none focus:border-[#D4AF37] cursor-pointer"
                 >
-                  <option value="all">🎖️ 모든 지원자격 등급 전체보기</option>
-                  <option value="my_tier">✨ 열람 가능 공고만 보기 (내 등급 이하)</option>
-                  <option value="restricted">🔒 상위 등급 공고 (기업명만 공개/블러)</option>
+                  <option value="all">🎖️ 모든 출강 매칭 공고 전체보기 (전체 의뢰 기업)</option>
+                  <option value="my_tier">✨ 내 회원 등급 및 이하 공고 (전체 내용 열람)</option>
+                  <option value="restricted">🔒 내 회원 등급보다 높은 공고 (기업명만 노출 / 블러)</option>
                   <option value="Prestige Legend">Prestige Legend 등급 전용</option>
                   <option value="Prestige Elite">Prestige Elite 등급 전용</option>
                   <option value="Prestige Master">Prestige Master 이상</option>
@@ -3766,9 +3767,9 @@ export default function App() {
                     <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
                       {paginatedLectures.map(lecture => {
                         const hasApplied = currentUser && lecture.applicants.includes(currentUser.uid);
-                        const userRank = currentUser ? getTierRank(currentUser.tier) : 1;
+                        const userRank = currentUser ? getTierRank(currentUser.tier) : 0;
                         const targetRank = getTierRank(lecture.targetTier);
-                        const isRestricted = Boolean(currentUser && !currentUser?.isAdmin && (userRank < targetRank));
+                        const isRestricted = !currentUser?.isAdmin && (userRank < targetRank);
                         
                         return (
                           <div 
@@ -7081,9 +7082,9 @@ export default function App() {
         const currentModalLec = lectures.find(l => l.id === selectedLectureForModal.id);
         if (!currentModalLec) return null;
 
-        const userRank = currentUser ? getTierRank(currentUser.tier) : 1;
+        const userRank = currentUser ? getTierRank(currentUser.tier) : 0;
         const targetRank = getTierRank(currentModalLec.targetTier);
-        const isRestricted = Boolean(currentUser && !currentUser?.isAdmin && (userRank < targetRank));
+        const isRestricted = !currentUser?.isAdmin && (userRank < targetRank);
 
         return (
           <div className="fixed inset-0 z-[999] bg-black/85 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto animate-in fade-in duration-200" onClick={() => setSelectedLectureForModal(null)}>
