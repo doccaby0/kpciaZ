@@ -2,6 +2,12 @@
   command = "npm run build"
   publish = "dist"
 
+[build.environment]
+  SECRETS_SCAN_SMART_DETECTION_ENABLED = "false"
+  SECRETS_SCAN_SMART_DETECTION_OMIT_VALUES = "AIzaSyD63gdULdIqT98pgE764BjfHSnFK9T5q9Y"
+  SECRETS_SCAN_OMIT_PATHS = "dist/*,dist/**,firebase-applet-config.json"
+  SECRETS_SCAN_OMIT_KEYS = "apiKey,FIREBASE_API_KEY,VITE_FIREBASE_API_KEY"
+
 [[redirects]]
   from = "/*"
   to = "/index.html"
