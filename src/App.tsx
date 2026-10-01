@@ -8252,10 +8252,6 @@ export default function App() {
               {/* Mode A: Login */}
               {authMode === 'login' && (
                 <form onSubmit={handleLogin} className="space-y-4">
-                  <div className="bg-amber-500/5 p-3 rounded-xl border border-amber-500/10 text-[10px] text-neutral-400 leading-normal">
-                    💡 <strong>테스트 체험 팁:</strong> 기본으로 탑재된 공식 자문 계정인 ID <strong>insight9lab</strong> / 비밀번호 <strong>400828</strong> 을 기입하시면 즉시 협회 포탈의 모든 권한을 체험하실 수 있습니다!
-                  </div>
-
                   <div className="space-y-1">
                     <label className="text-neutral-400 font-semibold block">로그인 아이디 (Login ID)</label>
                     <input
