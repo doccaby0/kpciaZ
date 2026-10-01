@@ -289,28 +289,31 @@ export class StorageService {
   }
 
   static getLocalLectures(): LectureRequest[] {
-    let raw = this.getLocalItem('kpcia_lectures_cleared') === 'true'
-      ? this.getLocal<LectureRequest[]>('lectures', [])
-      : this.getLocal<LectureRequest[]>('lectures', INITIAL_LECTURES);
-    
-    // Ensure all INITIAL_LECTURES are present in raw if not explicitly cleared
-    if (this.getLocalItem('kpcia_lectures_cleared') !== 'true') {
-      const rawIds = new Set(raw.map(l => l.id));
-      const missing = INITIAL_LECTURES.filter(l => !rawIds.has(l.id));
-      if (missing.length > 0) {
-        raw = [...raw, ...missing];
-        this.setLocal('lectures', raw);
-      }
+    let raw = this.getLocal<LectureRequest[]>('lectures', INITIAL_LECTURES);
+    if (!raw || raw.length === 0) {
+      raw = INITIAL_LECTURES;
+      this.setLocal('lectures', raw);
     }
     
-    // Enrich with companyName from INITIAL_LECTURES if missing for historical items
+    // Ensure all INITIAL_LECTURES (including all open matching notices) are present in raw
+    const rawIds = new Set(raw.map(l => l.id));
+    const missing = INITIAL_LECTURES.filter(l => !rawIds.has(l.id));
+    if (missing.length > 0) {
+      raw = [...raw, ...missing];
+      this.setLocal('lectures', raw);
+    }
+    
+    // Enrich with companyName and metadata from INITIAL_LECTURES if missing for historical items
     const initialMap = new Map(INITIAL_LECTURES.map(l => [l.id, l]));
     const enriched = raw.map(l => {
-      if (l.id.startsWith('lect_hist_') && (!l.companyName || l.companyName.trim() === '')) {
-        const initItem = initialMap.get(l.id);
-        if (initItem) {
-          return { ...l, companyName: initItem.companyName };
-        }
+      const initItem = initialMap.get(l.id);
+      if (initItem) {
+        return {
+          ...l,
+          companyName: (!l.companyName || l.companyName.trim() === '') ? initItem.companyName : l.companyName,
+          title: (!l.title || l.title.trim() === '') ? initItem.title : l.title,
+          description: (!l.description || l.description.trim() === '') ? initItem.description : l.description
+        };
       }
       return l;
     });
@@ -683,17 +686,23 @@ export class StorageService {
       const list: LectureRequest[] = [];
       snap.forEach(d => list.push(d.data() as LectureRequest));
       
-      // Prevent empty cloud snapshot from wiping local storage unless explicitly cleared
-      if (list.length === 0 && this.getLocalItem('kpcia_lectures_cleared') !== 'true') {
+      // Prevent empty cloud snapshot from wiping local storage
+      if (list.length === 0) {
         const local = this.getLocalLectures();
         if (local.length > 0) {
           console.log("Firestore 'lectures' collection is empty. Retaining local data and uploading to cloud...");
           local.forEach(l => setDoc(doc(db, 'lectures', l.id), this.cleanUndefined(l)).catch(console.warn));
+          callback(local);
           return;
         }
       }
       
-      callback(list);
+      // Ensure active open matching requests from INITIAL_LECTURES are preserved
+      const openLectures = INITIAL_LECTURES.filter(l => l.status === 'open');
+      const listIds = new Set(list.map(l => l.id));
+      const missingOpen = openLectures.filter(l => !listIds.has(l.id));
+      const combined = missingOpen.length > 0 ? [...missingOpen, ...list] : list;
+      callback(combined);
     }, (error) => {
       console.error("subscribeLectures error:", error);
     });

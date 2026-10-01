@@ -82,14 +82,45 @@ export class GoogleSheetsService {
 
   /**
    * Connect Google Account with popup to request Google Sheets & Drive permissions
-   * Supports Google Identity Services (GIS) token client with Firebase Auth fallback
+   * Prioritizes Firebase Auth signInWithPopup using the authorized authDomain to avoid 400 origin_mismatch
    */
   static async connectGoogleAccount(): Promise<{ user: { email?: string; displayName?: string }; accessToken: string }> {
-    const clientId = (firebaseConfig as any).oAuthClientId || '286813651786-833ulob4q2uaeoe1co0har47cif5srjf.apps.googleusercontent.com';
     isSigningIn = true;
 
-    // 1. First Priority: Try Google Identity Services (GIS) OAuth2 Token Client
-    // This connects directly without domain origin restrictions that can affect Firebase Auth
+    // 1. Primary: Firebase Auth signInWithPopup with GoogleAuthProvider
+    // Uses the authorized Firebase authDomain (gen-lang-client-0519834986.firebaseapp.com)
+    // which completely resolves 400 origin_mismatch errors.
+    if (auth) {
+      try {
+        const result = await signInWithPopup(auth, provider);
+        const credential = GoogleAuthProvider.credentialFromResult(result);
+        if (!credential?.accessToken) {
+          throw new Error('Google 인증 토큰(Access Token)을 수신하지 못했습니다.');
+        }
+        cachedAccessToken = credential.accessToken;
+        isSigningIn = false;
+        return {
+          user: {
+            email: result.user.email || 'Google 계정',
+            displayName: result.user.displayName || 'Google 사용자'
+          },
+          accessToken: cachedAccessToken
+        };
+      } catch (fbError: any) {
+        console.warn('Firebase Auth Sign-in Error:', fbError);
+        const code = fbError?.code;
+        if (code === 'auth/popup-closed-by-user') {
+          isSigningIn = false;
+          throw new Error('Google 로그인 팝업 창이 닫혔습니다. 다시 시도해 주세요.');
+        } else if (code === 'auth/popup-blocked') {
+          isSigningIn = false;
+          throw new Error('브라우저에서 Google 로그인 팝업창이 차단되었습니다. 주소창의 팝업 차단을 해제하시거나 [토큰 직접입력]을 이용해 주세요.');
+        }
+      }
+    }
+
+    // 2. Fallback: Google Identity Services (GIS) Token Client
+    const clientId = (firebaseConfig as any).oAuthClientId || '286813651786-833ulob4q2uaeoe1co0har47cif5srjf.apps.googleusercontent.com';
     const google = typeof window !== 'undefined' ? (window as any).google : null;
     if (google?.accounts?.oauth2 && clientId) {
       try {
@@ -142,44 +173,12 @@ export class GoogleSheetsService {
           accessToken: gisToken.accessToken
         };
       } catch (gisError: any) {
-        console.warn("GIS direct client failed, trying Firebase Auth fallback:", gisError);
-      }
-    }
-
-    // 2. Second Priority: Firebase Auth signInWithPopup
-    if (auth) {
-      try {
-        const result = await signInWithPopup(auth, provider);
-        const credential = GoogleAuthProvider.credentialFromResult(result);
-        if (!credential?.accessToken) {
-          throw new Error('Google 인증 토큰(Access Token)을 수신하지 못했습니다.');
-        }
-        cachedAccessToken = credential.accessToken;
-        isSigningIn = false;
-        return {
-          user: {
-            email: result.user.email || 'Google 계정',
-            displayName: result.user.displayName || 'Google 사용자'
-          },
-          accessToken: cachedAccessToken
-        };
-      } catch (fbError: any) {
-        isSigningIn = false;
-        console.error('Firebase Auth Sign-in Error:', fbError);
-        const code = fbError?.code;
-        if (code === 'auth/unauthorized-domain') {
-          throw new Error('접속 도메인이 Google 인증 허용 목록에 등록되지 않았습니다. 브라우저 팝업 허용을 확인하시거나 잠시 후 다시 시도해 주세요.');
-        } else if (code === 'auth/popup-blocked') {
-          throw new Error('브라우저에서 Google 로그인 팝업창이 차단되었습니다. 주소창 우측 상단의 팝업 차단을 해제해 주세요.');
-        } else if (code === 'auth/popup-closed-by-user') {
-          throw new Error('Google 로그인 팝업 창이 닫혔습니다. 다시 시도해 주세요.');
-        }
-        throw new Error(fbError.message || 'Google 계정 인증에 실패했습니다.');
+        console.warn("GIS direct client fallback failed:", gisError);
       }
     }
 
     isSigningIn = false;
-    throw new Error('Google 인증 서비스를 초기화할 수 없습니다. 브라우저 새로고침 후 다시 시도해 주세요.');
+    throw new Error('Google 계정 인증에 실패했습니다. 브라우저 팝업 차단을 해제하시거나 [토큰 직접입력]을 이용해 주세요.');
   }
 
   /**

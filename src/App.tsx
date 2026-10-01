@@ -78,17 +78,24 @@ export default function App() {
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'info' | 'error' } | null>(null);
 
   // Core Entity States
-  const [users, setUsers] = useState<UserProfile[]>([]);
-  const [currentUser, setCurrentUser] = useState<UserProfile | null>(null);
-  const [lectures, setLectures] = useState<LectureRequest[]>([]);
-  const [programs, setPrograms] = useState<EducationalProgram[]>([]);
-  const [transactions, setTransactions] = useState<MileageTransaction[]>([]);
+  const [users, setUsers] = useState<UserProfile[]>(() => StorageService.getLocalUsers());
+  const [currentUser, setCurrentUser] = useState<UserProfile | null>(() => {
+    const savedUserUid = StorageService.getSessionItem('kpcia_logged_in_uid') || StorageService.getLocalItem('kpcia_logged_in_uid');
+    if (savedUserUid) {
+      const localUsers = StorageService.getLocalUsers();
+      return localUsers.find(u => u.uid === savedUserUid) || null;
+    }
+    return null;
+  });
+  const [lectures, setLectures] = useState<LectureRequest[]>(() => StorageService.getLocalLectures());
+  const [programs, setPrograms] = useState<EducationalProgram[]>(() => StorageService.getLocalPrograms());
+  const [transactions, setTransactions] = useState<MileageTransaction[]>(() => StorageService.getLocalTransactions());
 
   // Helper: Check if a user has registered a curriculum in KPCIA Premium Self-Developed Training Process
   const hasRegisteredCurriculum = (userId: string) => {
     return programs.some(p => p.authorId === userId);
   };
-  const [proposals, setProposals] = useState<PartnershipProposal[]>([]);
+  const [proposals, setProposals] = useState<PartnershipProposal[]>(() => StorageService.getLocalProposals());
 
   // Modals & Active Forms
   const [showAuthModal, setShowAuthModal] = useState<boolean>(false);
@@ -307,7 +314,6 @@ export default function App() {
 
   // Memoized: Main filtered and sorted lectures for list rendering
   const filteredAndSortedLectures = React.useMemo(() => {
-    // Non-logged in guests default to rank 1 (Prestige Member) so they can view basic lectures freely
     const userRank = currentUser ? getTierRank(currentUser.tier) : 1;
     const isAdmin = Boolean(currentUser?.isAdmin);
 
@@ -315,7 +321,8 @@ export default function App() {
       .filter(l => {
         const queryText = searchLecture.toLowerCase().trim();
         const targetRank = getTierRank(l.targetTier);
-        const isRestricted = !isAdmin && (userRank < targetRank);
+        // Tier restriction applies to logged-in members whose rank is below the target tier
+        const isRestricted = Boolean(currentUser && !isAdmin && (userRank < targetRank));
 
         // For restricted lectures, only companyName is publicly searchable
         const titleMatch = !queryText 
@@ -328,11 +335,11 @@ export default function App() {
         if (filterLecTier === 'all') {
           tierMatch = true;
         } else if (filterLecTier === 'my_tier') {
-          // Can view full details: user's tier is equal or higher
-          tierMatch = isAdmin || (userRank >= targetRank);
+          // Can view full details: user's tier is equal or higher, or guest browsing
+          tierMatch = !currentUser || isAdmin || (userRank >= targetRank);
         } else if (filterLecTier === 'restricted') {
-          // Higher tier than user (blurred notices)
-          tierMatch = !isAdmin && (userRank < targetRank);
+          // Higher tier than logged-in user
+          tierMatch = Boolean(currentUser && !isAdmin && (userRank < targetRank));
         } else {
           tierMatch = l.targetTier === filterLecTier;
         }
@@ -365,7 +372,7 @@ export default function App() {
         }
         return (b.id || '').localeCompare(a.id || '');
       });
-  }, [lectures, searchLecture, filterLecTier, filterLecStatus]);
+  }, [lectures, searchLecture, filterLecTier, filterLecStatus, currentUser]);
 
   // Memoized: Lectures count statistics
   const lecturesStats = React.useMemo(() => {
@@ -3552,7 +3559,15 @@ export default function App() {
               <div className="flex items-center gap-2.5">
                 <span className="p-1 rounded-lg bg-amber-500/20 text-[#D4AF37] shrink-0 text-sm">🎖️</span>
                 <span className="leading-snug text-neutral-200">
-                  <strong className="text-amber-300 font-extrabold">등급별 출강 정보 열람 시스템</strong>: 강사님의 자격 등급({currentUser ? currentUser.tier : '미로그인'})에 따라 <strong>해당 등급 및 하위 등급의 모든 출강 정보</strong>가 전체 공개되며, <strong>상위 등급 공고는 의뢰 기업명만 공개되고 세부 정보는 블러 처리</strong>됩니다.
+                  {!currentUser ? (
+                    <>
+                      <strong className="text-amber-300 font-extrabold">출강정보센터 안내</strong>: 비회원/게스트는 전체 출강 요청 요강을 자유롭게 열람하실 수 있으며, 실제 출강 매칭 신청은 <strong>강사 로그인(회원가입)</strong> 후 가능합니다. 로그인 시 소속 등급에 따른 맞춤형 권한이 적용됩니다.
+                    </>
+                  ) : (
+                    <>
+                      <strong className="text-amber-300 font-extrabold">등급별 출강 정보 열람 시스템</strong>: 강사님의 자격 등급({currentUser.tier})에 따라 <strong>해당 등급 및 하위 등급의 모든 출강 정보</strong>가 전체 공개되며, <strong>상위 등급 공고는 의뢰 기업명만 공개되고 세부 정보는 블러 처리</strong>됩니다.
+                    </>
+                  )}
                 </span>
               </div>
               <div className="flex items-center gap-2 shrink-0">
@@ -3753,7 +3768,7 @@ export default function App() {
                         const hasApplied = currentUser && lecture.applicants.includes(currentUser.uid);
                         const userRank = currentUser ? getTierRank(currentUser.tier) : 1;
                         const targetRank = getTierRank(lecture.targetTier);
-                        const isRestricted = !currentUser?.isAdmin && (userRank < targetRank);
+                        const isRestricted = Boolean(currentUser && !currentUser?.isAdmin && (userRank < targetRank));
                         
                         return (
                           <div 
@@ -7068,7 +7083,7 @@ export default function App() {
 
         const userRank = currentUser ? getTierRank(currentUser.tier) : 1;
         const targetRank = getTierRank(currentModalLec.targetTier);
-        const isRestricted = !currentUser?.isAdmin && (userRank < targetRank);
+        const isRestricted = Boolean(currentUser && !currentUser?.isAdmin && (userRank < targetRank));
 
         return (
           <div className="fixed inset-0 z-[999] bg-black/85 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto animate-in fade-in duration-200" onClick={() => setSelectedLectureForModal(null)}>
