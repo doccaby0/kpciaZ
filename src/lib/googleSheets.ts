@@ -1,11 +1,15 @@
 import { GoogleAuthProvider, signInWithPopup, onAuthStateChanged, User } from 'firebase/auth';
 import { auth } from './firebase';
 import { LectureRequest, UserProfile, EducationalProgram, PartnershipProposal } from '../types';
+import firebaseConfig from '../../firebase-applet-config.json';
 
 export const WORKSPACE_SCOPES = [
   'https://www.googleapis.com/auth/spreadsheets',
   'https://www.googleapis.com/auth/drive.file'
 ];
+
+// Helper delay to avoid Google Sheets API rate-limiting (429 Quota Exceeded)
+const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
 // In-memory access token cache (Per workspace-integration skill guidelines: DO NOT store in localStorage/sessionStorage)
 let cachedAccessToken: string | null = null;
@@ -78,26 +82,104 @@ export class GoogleSheetsService {
 
   /**
    * Connect Google Account with popup to request Google Sheets & Drive permissions
+   * Supports Google Identity Services (GIS) token client with Firebase Auth fallback
    */
-  static async connectGoogleAccount(): Promise<{ user: User; accessToken: string }> {
-    if (!auth) {
-      throw new Error('Firebase Auth가 초기화되지 않았습니다.');
-    }
-    try {
-      isSigningIn = true;
-      const result = await signInWithPopup(auth, provider);
-      const credential = GoogleAuthProvider.credentialFromResult(result);
-      if (!credential?.accessToken) {
-        throw new Error('구글 인증 토큰(Access Token)을 수신하지 못했습니다.');
+  static async connectGoogleAccount(): Promise<{ user: { email?: string; displayName?: string }; accessToken: string }> {
+    const clientId = (firebaseConfig as any).oAuthClientId || '286813651786-833ulob4q2uaeoe1co0har47cif5srjf.apps.googleusercontent.com';
+    isSigningIn = true;
+
+    // 1. First Priority: Try Google Identity Services (GIS) OAuth2 Token Client
+    // This connects directly without domain origin restrictions that can affect Firebase Auth
+    const google = typeof window !== 'undefined' ? (window as any).google : null;
+    if (google?.accounts?.oauth2 && clientId) {
+      try {
+        const gisToken = await new Promise<{ accessToken: string; email?: string; displayName?: string }>((resolve, reject) => {
+          const client = google.accounts.oauth2.initTokenClient({
+            client_id: clientId,
+            scope: [
+              ...WORKSPACE_SCOPES,
+              'https://www.googleapis.com/auth/userinfo.email',
+              'https://www.googleapis.com/auth/userinfo.profile'
+            ].join(' '),
+            prompt: 'select_account',
+            callback: async (resp: any) => {
+              if (resp.error) {
+                reject(new Error(resp.error_description || resp.error || 'Google 계정 인증에 실패했습니다.'));
+              } else if (resp.access_token) {
+                let email = '';
+                let displayName = '';
+                try {
+                  const uRes = await fetch('https://www.googleapis.com/oauth2/v2/userinfo', {
+                    headers: { Authorization: `Bearer ${resp.access_token}` }
+                  });
+                  if (uRes.ok) {
+                    const uData = await uRes.json();
+                    email = uData.email || '';
+                    displayName = uData.name || '';
+                  }
+                } catch {
+                  // Ignore userinfo failure
+                }
+                resolve({ accessToken: resp.access_token, email, displayName });
+              } else {
+                reject(new Error('Google 액세스 토큰을 수신하지 못했습니다.'));
+              }
+            },
+            error_callback: (err: any) => {
+              reject(new Error(err?.message || 'Google 로그인 팝업 창이 차단되었거나 실패했습니다. 브라우저 팝업 허용을 확인해 주세요.'));
+            }
+          });
+          client.requestAccessToken({ prompt: 'select_account' });
+        });
+
+        cachedAccessToken = gisToken.accessToken;
+        isSigningIn = false;
+        return {
+          user: {
+            email: gisToken.email || 'Google 연동 계정',
+            displayName: gisToken.displayName || 'Google 사용자'
+          },
+          accessToken: gisToken.accessToken
+        };
+      } catch (gisError: any) {
+        console.warn("GIS direct client failed, trying Firebase Auth fallback:", gisError);
       }
-      cachedAccessToken = credential.accessToken;
-      return { user: result.user, accessToken: cachedAccessToken };
-    } catch (error: any) {
-      console.error('Google Sheets Sign-in Error:', error);
-      throw error;
-    } finally {
-      isSigningIn = false;
     }
+
+    // 2. Second Priority: Firebase Auth signInWithPopup
+    if (auth) {
+      try {
+        const result = await signInWithPopup(auth, provider);
+        const credential = GoogleAuthProvider.credentialFromResult(result);
+        if (!credential?.accessToken) {
+          throw new Error('Google 인증 토큰(Access Token)을 수신하지 못했습니다.');
+        }
+        cachedAccessToken = credential.accessToken;
+        isSigningIn = false;
+        return {
+          user: {
+            email: result.user.email || 'Google 계정',
+            displayName: result.user.displayName || 'Google 사용자'
+          },
+          accessToken: cachedAccessToken
+        };
+      } catch (fbError: any) {
+        isSigningIn = false;
+        console.error('Firebase Auth Sign-in Error:', fbError);
+        const code = fbError?.code;
+        if (code === 'auth/unauthorized-domain') {
+          throw new Error('접속 도메인이 Google 인증 허용 목록에 등록되지 않았습니다. 브라우저 팝업 허용을 확인하시거나 잠시 후 다시 시도해 주세요.');
+        } else if (code === 'auth/popup-blocked') {
+          throw new Error('브라우저에서 Google 로그인 팝업창이 차단되었습니다. 주소창 우측 상단의 팝업 차단을 해제해 주세요.');
+        } else if (code === 'auth/popup-closed-by-user') {
+          throw new Error('Google 로그인 팝업 창이 닫혔습니다. 다시 시도해 주세요.');
+        }
+        throw new Error(fbError.message || 'Google 계정 인증에 실패했습니다.');
+      }
+    }
+
+    isSigningIn = false;
+    throw new Error('Google 인증 서비스를 초기화할 수 없습니다. 브라우저 새로고침 후 다시 시도해 주세요.');
   }
 
   /**
@@ -620,7 +702,6 @@ export class GoogleSheetsService {
         sheets: [
           {
             properties: {
-              sheetId: 0,
               title: '실시간_출강정산대장',
               gridProperties: {
                 rowCount: 1000,
@@ -765,7 +846,7 @@ export class GoogleSheetsService {
     const allValues = [headers, ...rows, summaryRow];
 
     await fetch(
-      `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${encodeURIComponent(tabTitle)}:clear`,
+      `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${encodeURIComponent(`'${tabTitle}'!A1:Z500`)}:clear`,
       {
         method: 'POST',
         headers: {
@@ -775,7 +856,7 @@ export class GoogleSheetsService {
       }
     ).catch(() => {});
 
-    const range = `${tabTitle}!A1`;
+    const range = `'${tabTitle}'!A1`;
     const writeRes = await fetch(
       `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${encodeURIComponent(range)}?valueInputOption=USER_ENTERED`,
       {
@@ -820,7 +901,7 @@ export class GoogleSheetsService {
     const allValues = [headers, ...rows, summaryRow];
 
     await fetch(
-      `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${encodeURIComponent(tabTitle)}:clear`,
+      `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${encodeURIComponent(`'${tabTitle}'!A1:Z500`)}:clear`,
       {
         method: 'POST',
         headers: {
@@ -830,7 +911,7 @@ export class GoogleSheetsService {
       }
     ).catch(() => {});
 
-    const range = `${tabTitle}!A1`;
+    const range = `'${tabTitle}'!A1`;
     const writeRes = await fetch(
       `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${encodeURIComponent(range)}?valueInputOption=USER_ENTERED`,
       {
@@ -882,7 +963,7 @@ export class GoogleSheetsService {
     const allValues = [headers, ...rows, summaryRow];
 
     await fetch(
-      `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${encodeURIComponent(tabTitle)}:clear`,
+      `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${encodeURIComponent(`'${tabTitle}'!A1:Z500`)}:clear`,
       {
         method: 'POST',
         headers: {
@@ -892,7 +973,7 @@ export class GoogleSheetsService {
       }
     ).catch(() => {});
 
-    const range = `${tabTitle}!A1`;
+    const range = `'${tabTitle}'!A1`;
     const writeRes = await fetch(
       `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${encodeURIComponent(range)}?valueInputOption=USER_ENTERED`,
       {
@@ -944,7 +1025,7 @@ export class GoogleSheetsService {
     const allValues = [headers, ...rows, summaryRow];
 
     await fetch(
-      `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${encodeURIComponent(tabTitle)}:clear`,
+      `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${encodeURIComponent(`'${tabTitle}'!A1:Z500`)}:clear`,
       {
         method: 'POST',
         headers: {
@@ -954,7 +1035,7 @@ export class GoogleSheetsService {
       }
     ).catch(() => {});
 
-    const range = `${tabTitle}!A1`;
+    const range = `'${tabTitle}'!A1`;
     const writeRes = await fetch(
       `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${encodeURIComponent(range)}?valueInputOption=USER_ENTERED`,
       {
@@ -1013,6 +1094,7 @@ export class GoogleSheetsService {
       );
       if (res.syncedTabs) syncedTabs.push(...res.syncedTabs);
       totalItems += res.totalSynced;
+      await delay(250);
     }
 
     // 2. Sync Instructors
@@ -1020,6 +1102,7 @@ export class GoogleSheetsService {
       const res = await this.syncInstructorsToSheet(params.users, accessToken);
       if (res.syncedTabs) syncedTabs.push(...res.syncedTabs);
       totalItems += res.totalSynced;
+      await delay(250);
     }
 
     // 3. Sync Proposals
@@ -1027,6 +1110,7 @@ export class GoogleSheetsService {
       const res = await this.syncProposalsToSheet(params.proposals, accessToken);
       if (res.syncedTabs) syncedTabs.push(...res.syncedTabs);
       totalItems += res.totalSynced;
+      await delay(250);
     }
 
     // 4. Sync Programs
@@ -1067,6 +1151,7 @@ export class GoogleSheetsService {
         const tabTitle = `${y}년_정산대장`;
         await this.syncTab(sheetId, accessToken, tabTitle, yearLectures, users, `${y}년 합계 및 평균`);
         syncedTabs.push(tabTitle);
+        await delay(200);
       }
 
       // Also update master overall sheet '실시간_출강정산대장'

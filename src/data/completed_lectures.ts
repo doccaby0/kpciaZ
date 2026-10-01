@@ -183,7 +183,17 @@ export function getCompletedLectures(): LectureRequest[] {
     const companyName = cols[1]?.trim() || '';
     const partnerCompany = cols[2]?.trim() || '';
     const description = cols[3]?.trim() || '';
-    const targetTier = (cols[4]?.trim() || 'Prestige Legend') as InstructorTier;
+    const tierCycle: InstructorTier[] = [
+      'Prestige Member',
+      'Prestige Associate',
+      'Prestige Professional',
+      'Prestige Master',
+      'Prestige Elite',
+      'Prestige Legend'
+    ];
+    const targetTier = (cols[4] && cols[4].trim() && cols[4].trim() !== 'Prestige Legend' 
+      ? cols[4].trim() 
+      : tierCycle[i % tierCycle.length]) as InstructorTier;
     const date = cols[5]?.trim() || '2026-07-18';
     const startTime = cols[6]?.trim() || '10:00';
     const endTime = cols[7]?.trim() || '12:00';
@@ -240,6 +250,148 @@ export function getCompletedLectures(): LectureRequest[] {
       })()
     });
   }
-  
-  return results;
+
+  // Prepend active open lecture requests covering each tier for live matching & tier visibility demonstration
+  const openLectures: LectureRequest[] = [
+    {
+      id: "lect_open_member_1",
+      title: "신입 임직원 조직적응 힐링 가드닝 & 오피스 반려식물 테라피",
+      companyName: "현대백화점그룹",
+      partnerCompany: "인사이트9교육연구소",
+      description: "2026 하반기 신입사원 온보딩 연수 중 스트레스 해소 및 소통 활성화를 위한 반려식물 테라피 실습 특강입니다. 기초 강사님부터 누구나 지원 가능합니다.",
+      targetTier: "Prestige Member",
+      budget: 650000,
+      mileageRoyalty: 0,
+      date: "2026-07-25",
+      time: "14:00 - 16:00",
+      duration: "2시간",
+      location: "현대백화점 인재원 대강당",
+      attendees: 25,
+      managerName: "이소연 팀장",
+      managerPhone: "010-3321-9876",
+      status: "open",
+      applicants: [],
+      mainHours: 2,
+      assistantHours: 2,
+      materialCost: 15000,
+      createdAt: "2026-07-01T09:00:00Z"
+    },
+    {
+      id: "lect_open_associate_1",
+      title: "교대근무 엔지니어 피로회복 천연 아로마 롤온 & 디퓨저 제작",
+      companyName: "SK하이닉스",
+      partnerCompany: "인사이트9교육연구소",
+      description: "24시간 반도체 생산라인 교대 근무자들의 수면의 질 개선 및 만성 피로 회복을 위한 후각 테라피 및 천연 에센셜 오일 블렌딩 실습 과정입니다.",
+      targetTier: "Prestige Associate",
+      budget: 950000,
+      mileageRoyalty: 0,
+      date: "2026-08-02",
+      time: "10:00 - 12:00",
+      duration: "2시간",
+      location: "SK하이닉스 이천캠퍼스 행복나눔관",
+      attendees: 30,
+      managerName: "박준혁 수석",
+      managerPhone: "010-4422-5588",
+      status: "open",
+      applicants: [],
+      mainHours: 2,
+      assistantHours: 2,
+      materialCost: 20000,
+      createdAt: "2026-07-03T11:30:00Z"
+    },
+    {
+      id: "lect_open_pro_1",
+      title: "IT/SW 테크 인력 번아웃 예방 및 전통 자개 트레이 ESG 공예",
+      companyName: "네이버(NAVER)",
+      partnerCompany: "인사이트9교육연구소",
+      description: "고강도 개발 스프린트 인력의 디지털 디톡스 및 몰입을 통한 마인드 웰니스 제공. 업사이클링 천연 자개 기법을 활용한 트레이 제작 실습.",
+      targetTier: "Prestige Professional",
+      budget: 1400000,
+      mileageRoyalty: 0,
+      date: "2026-08-14",
+      time: "14:00 - 16:30",
+      duration: "2.5시간",
+      location: "네이버 그린팩토리 2층 커뮤니티홀",
+      attendees: 20,
+      managerName: "김민재 리드",
+      managerPhone: "010-8877-6655",
+      status: "open",
+      applicants: [],
+      mainHours: 2.5,
+      assistantHours: 2.5,
+      materialCost: 35000,
+      createdAt: "2026-07-05T14:00:00Z"
+    },
+    {
+      id: "lect_open_master_1",
+      title: "핵심 리더십 심리적 안전감(Psychological Safety) 및 조직 코칭",
+      companyName: "삼성전자 DS부문",
+      partnerCompany: "인사이트9교육연구소",
+      description: "조직 내 심리적 안전감 조성과 세대 간 건설적 피드백 프로세스 체득. KPCIA 인증 지식 IP 연계 과정으로 출강 시 로열티 마일리지 추가 적립.",
+      targetTier: "Prestige Master",
+      budget: 2200000,
+      mileageRoyalty: 50000,
+      date: "2026-08-20",
+      time: "13:00 - 16:00",
+      duration: "3시간",
+      location: "삼성전자 기흥캠퍼스 창조관",
+      attendees: 35,
+      managerName: "정우성 부장",
+      managerPhone: "010-5511-9988",
+      status: "open",
+      applicants: [],
+      mainHours: 3,
+      assistantHours: 3,
+      materialCost: 25000,
+      createdAt: "2026-07-07T16:00:00Z"
+    },
+    {
+      id: "lect_open_elite_1",
+      title: "C-Level 경영진 프라이빗 마인드셋 & 프리미엄 아로마 웰니스",
+      companyName: "LG에너지솔루션",
+      partnerCompany: "인사이트9교육연구소",
+      description: "최고 의사결정권자 및 임원단을 위한 VIP 1:1 맞춤형 향기 테라피 및 심신 리셋 세션. 최고 수준의 강의 역량과 전문성이 요구됩니다.",
+      targetTier: "Prestige Elite",
+      budget: 3500000,
+      mileageRoyalty: 100000,
+      date: "2026-08-28",
+      time: "15:00 - 17:00",
+      duration: "2시간",
+      location: "LG에너지솔루션 여의도 파크원 본사 VIP룸",
+      attendees: 15,
+      managerName: "최원석 상무",
+      managerPhone: "010-9900-1122",
+      status: "open",
+      applicants: [],
+      mainHours: 2,
+      assistantHours: 0,
+      materialCost: 50000,
+      createdAt: "2026-07-10T10:00:00Z"
+    },
+    {
+      id: "lect_open_legend_1",
+      title: "전사 창립기념 300인 비전 공유 & 대규모 힐링 테라피 콘서트",
+      companyName: "현대자동차 남양연구소",
+      partnerCompany: "인사이트9교육연구소",
+      description: "연구소 전 임직원이 참여하는 대규모 감각 테라피 및 비전 얼라인먼트 콘서트. 전국 최고 권위의 KPCIA Legend 등급 마스터 강사 직강 매칭.",
+      targetTier: "Prestige Legend",
+      budget: 5500000,
+      mileageRoyalty: 200000,
+      date: "2026-09-05",
+      time: "13:30 - 16:30",
+      duration: "3시간",
+      location: "현대자동차 남양연구소 대강당",
+      attendees: 300,
+      managerName: "강태양 책임",
+      managerPhone: "010-7766-3344",
+      status: "open",
+      applicants: [],
+      mainHours: 3,
+      assistantHours: 3,
+      materialCost: 15000,
+      createdAt: "2026-07-12T13:00:00Z"
+    }
+  ];
+
+  return [...openLectures, ...results];
 }
