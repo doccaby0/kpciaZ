@@ -2,11 +2,33 @@ import { GoogleAuthProvider, signInWithPopup, onAuthStateChanged, User } from 'f
 import { auth } from './firebase';
 import { LectureRequest, UserProfile, EducationalProgram, PartnershipProposal } from '../types';
 import * as XLSX from 'xlsx';
+import firebaseConfig from '../../firebase-applet-config.json';
 
 export const WORKSPACE_SCOPES = [
   'https://www.googleapis.com/auth/spreadsheets',
   'https://www.googleapis.com/auth/drive.file'
 ];
+
+export const DEFAULT_GCP_CLIENT_ID = '781281314481-a9ukmlpuivgldqqnqk9602mc3i01ccl0.apps.googleusercontent.com';
+export const OFFICIAL_APPLET_CLIENT_ID = (firebaseConfig as any).oAuthClientId || '286813651786-833ulob4q2uaeoe1co0har47cif5srjf.apps.googleusercontent.com';
+
+export function getEffectiveOAuthClientId(): string {
+  try {
+    const saved = localStorage.getItem('kpcia_custom_oauth_client_id');
+    if (saved && saved.trim()) return saved.trim();
+  } catch {}
+  return DEFAULT_GCP_CLIENT_ID;
+}
+
+export function setCustomOAuthClientId(clientId: string): void {
+  try {
+    if (clientId && clientId.trim()) {
+      localStorage.setItem('kpcia_custom_oauth_client_id', clientId.trim());
+    } else {
+      localStorage.removeItem('kpcia_custom_oauth_client_id');
+    }
+  } catch {}
+}
 
 // In-memory access token cache (Per workspace-integration skill guidelines: DO NOT store in localStorage/sessionStorage)
 let cachedAccessToken: string | null = null;
@@ -83,81 +105,15 @@ export class GoogleSheetsService {
 
   /**
    * Connect Google Account with popup to request Google Sheets & Drive permissions
-   * Uses Google Identity Services (GIS) Token Client with user newly created Client ID
+   * Prioritizes Firebase Auth signInWithPopup (standard Workspace OAuth integration),
+   * and falls back to Google Identity Services (GIS) Token Client.
    */
-  static async connectGoogleAccount(): Promise<{ user: { email?: string; displayName?: string }; accessToken: string }> {
+  static async connectGoogleAccount(preferredMethod: 'auto' | 'firebase' | 'gis' = 'auto', customClientId?: string): Promise<{ user: { email?: string; displayName?: string }; accessToken: string }> {
     isSigningIn = true;
-    const clientId = '781281314481-a9ukmlpuivgldqqnqk9602mc3i01ccl0.apps.googleusercontent.com';
+    const clientId = customClientId || getEffectiveOAuthClientId();
 
-    // 1. Primary: Use Google Identity Services (GIS) Token Client with the newly registered client_id
-    const google = typeof window !== 'undefined' ? (window as any).google : null;
-    if (google?.accounts?.oauth2) {
-      try {
-        const gisResult = await new Promise<{ accessToken: string; email?: string; displayName?: string }>((resolve, reject) => {
-          try {
-            const client = google.accounts.oauth2.initTokenClient({
-              client_id: clientId,
-              scope: [
-                ...WORKSPACE_SCOPES,
-                'https://www.googleapis.com/auth/userinfo.email',
-                'https://www.googleapis.com/auth/userinfo.profile'
-              ].join(' '),
-              prompt: 'select_account',
-              callback: async (resp: any) => {
-                if (resp.error) {
-                  reject(new Error(resp.error_description || resp.error || 'Google 계정 인증에 실패했습니다.'));
-                  return;
-                }
-                if (!resp.access_token) {
-                  reject(new Error('Google 액세스 토큰을 수신하지 못했습니다.'));
-                  return;
-                }
-                let email = '';
-                let displayName = '';
-                try {
-                  const uRes = await fetch('https://www.googleapis.com/oauth2/v2/userinfo', {
-                    headers: { Authorization: `Bearer ${resp.access_token}` }
-                  });
-                  if (uRes.ok) {
-                    const uData = await uRes.json();
-                    email = uData.email || '';
-                    displayName = uData.name || '';
-                  }
-                } catch {
-                  // Ignore userinfo failure
-                }
-                resolve({ accessToken: resp.access_token, email, displayName });
-              },
-              error_callback: (err: any) => {
-                reject(new Error(err?.message || 'Google 로그인 팝업 창이 닫혔거나 차단되었습니다.'));
-              }
-            });
-            client.requestAccessToken({ prompt: 'select_account' });
-          } catch (initErr: any) {
-            reject(initErr);
-          }
-        });
-
-        cachedAccessToken = gisResult.accessToken;
-        isSigningIn = false;
-        return {
-          user: {
-            email: gisResult.email || 'Google 연동 계정',
-            displayName: gisResult.displayName || 'Google 사용자'
-          },
-          accessToken: gisResult.accessToken
-        };
-      } catch (gisErr: any) {
-        console.warn("GIS token client fallback:", gisErr);
-        if (gisErr?.message?.includes('popup_closed') || gisErr?.message?.includes('창이 닫혔')) {
-          isSigningIn = false;
-          throw new Error('Google 로그인 팝업 창이 닫혔습니다. 다시 시도해 주세요.');
-        }
-      }
-    }
-
-    // 2. Secondary fallback: Firebase Auth signInWithPopup
-    if (auth) {
+    // 1. Primary (auto / firebase): Try Firebase Auth signInWithPopup
+    if ((preferredMethod === 'auto' || preferredMethod === 'firebase') && auth) {
       try {
         const result = await signInWithPopup(auth, provider);
         const credential = GoogleAuthProvider.credentialFromResult(result);
@@ -173,20 +129,105 @@ export class GoogleSheetsService {
           };
         }
       } catch (fbError: any) {
-        console.warn('Firebase Auth Sign-in Error:', fbError);
+        console.warn('Firebase Auth Sign-in Attempt:', fbError);
         const code = fbError?.code;
         if (code === 'auth/popup-closed-by-user') {
           isSigningIn = false;
-          throw new Error('Google 로그인 팝업 창이 닫혔습니다. 다시 시도해 주세요.');
+          throw new Error('Google 로그인 팝업 창이 닫혔습니다.');
         } else if (code === 'auth/popup-blocked') {
           isSigningIn = false;
           throw new Error('브라우저에서 Google 로그인 팝업창이 차단되었습니다. 주소창의 팝업 차단을 해제해 주세요.');
+        }
+        
+        // If explicitly requested firebase, throw the error
+        if (preferredMethod === 'firebase') {
+          isSigningIn = false;
+          throw new Error(`Firebase Auth 로그인 오류 (${code || fbError.message}). Google 콘솔 인증을 이용해 보세요.`);
+        }
+        // Otherwise, in 'auto' mode fall through to GIS below
+      }
+    }
+
+    // 2. Google Identity Services (GIS) Token Client
+    const google = typeof window !== 'undefined' ? (window as any).google : null;
+    const clientIdsToTry = customClientId 
+      ? [customClientId] 
+      : (preferredMethod === 'firebase' ? [OFFICIAL_APPLET_CLIENT_ID, DEFAULT_GCP_CLIENT_ID] : [DEFAULT_GCP_CLIENT_ID, OFFICIAL_APPLET_CLIENT_ID]);
+
+    if (google?.accounts?.oauth2) {
+      for (const targetClientId of clientIdsToTry) {
+        try {
+          const gisResult = await new Promise<{ accessToken: string; email?: string; displayName?: string }>((resolve, reject) => {
+            try {
+              const client = google.accounts.oauth2.initTokenClient({
+                client_id: targetClientId,
+                scope: [
+                  ...WORKSPACE_SCOPES,
+                  'https://www.googleapis.com/auth/userinfo.email',
+                  'https://www.googleapis.com/auth/userinfo.profile'
+                ].join(' '),
+                prompt: 'select_account',
+                callback: async (resp: any) => {
+                  if (resp.error) {
+                    reject(new Error(resp.error_description || resp.error || 'Google 계정 인증에 실패했습니다.'));
+                    return;
+                  }
+                  if (!resp.access_token) {
+                    reject(new Error('Google 액세스 토큰을 수신하지 못했습니다.'));
+                    return;
+                  }
+                  let email = '';
+                  let displayName = '';
+                  try {
+                    const uRes = await fetch('https://www.googleapis.com/oauth2/v2/userinfo', {
+                      headers: { Authorization: `Bearer ${resp.access_token}` }
+                    });
+                    if (uRes.ok) {
+                      const uData = await uRes.json();
+                      email = uData.email || '';
+                      displayName = uData.name || '';
+                    }
+                  } catch {
+                    // Ignore userinfo failure
+                  }
+                  resolve({ accessToken: resp.access_token, email, displayName });
+                },
+                error_callback: (err: any) => {
+                  reject(new Error(err?.message || 'Google 로그인 팝업 창이 닫혔거나 차단되었습니다.'));
+                }
+              });
+              client.requestAccessToken({ prompt: 'select_account' });
+            } catch (initErr: any) {
+              reject(initErr);
+            }
+          });
+
+          cachedAccessToken = gisResult.accessToken;
+          isSigningIn = false;
+          return {
+            user: {
+              email: gisResult.email || 'Google 연동 계정',
+              displayName: gisResult.displayName || 'Google 사용자'
+            },
+            accessToken: gisResult.accessToken
+          };
+        } catch (gisErr: any) {
+          console.warn(`GIS client ${targetClientId} error:`, gisErr);
+          if (gisErr?.message?.includes('popup_closed') || gisErr?.message?.includes('창이 닫혔')) {
+            isSigningIn = false;
+            throw new Error('Google 로그인 팝업 창이 닫혔습니다.');
+          }
+          // If this was the last client ID to try, throw error
+          if (targetClientId === clientIdsToTry[clientIdsToTry.length - 1]) {
+            isSigningIn = false;
+            throw gisErr;
+          }
         }
       }
     }
 
     isSigningIn = false;
-    throw new Error('Google 계정 인증에 실패했습니다. 구글 콘솔에 설정한 내용이 전파되는 데 약 2~5분 정도 소요될 수 있으니 잠시 후 다시 시도해 주세요.');
+    throw new Error('Google 계정 인증에 실패했습니다. Google Cloud Console 설정이 글로벌 인증 서버에 전파되는 데 약 5~15분 정도 소요될 수 있으니 잠시 후 다시 시도해 주세요.');
   }
 
   /**

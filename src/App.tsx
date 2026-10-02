@@ -15,7 +15,7 @@ import * as XLSX from 'xlsx';
 import ExcelJS from 'exceljs';
 import QRCode from 'qrcode';
 import { StorageService, generateBadgeForTier, INITIAL_LECTURES } from './lib/firebase';
-import { GoogleSheetsService, GoogleSyncMode } from './lib/googleSheets';
+import { GoogleSheetsService, GoogleSyncMode, DEFAULT_GCP_CLIENT_ID } from './lib/googleSheets';
 import { sanitizeString, sanitizePhone } from './utils/security';
 import { 
   Award, 
@@ -1578,10 +1578,10 @@ export default function App() {
   };
 
   // Master Ledger Google Sheets & Excel Export Handlers
-  const handleConnectGoogleSheets = async () => {
+  const handleConnectGoogleSheets = async (method: 'auto' | 'firebase' | 'gis' = 'auto') => {
     try {
       setIsSyncingGoogleSheets(true);
-      const { user, accessToken } = await GoogleSheetsService.connectGoogleAccount();
+      const { user, accessToken } = await GoogleSheetsService.connectGoogleAccount(method);
       setIsGoogleSheetsConnected(true);
       setGoogleConnectedEmail(user.email || user.displayName || 'Google 계정');
       
@@ -5747,168 +5747,31 @@ export default function App() {
               </div>
             )}
 
-            {/* Beautiful Completed Lecture Excel Sheet & Download Section */}
+            {/* Beautiful Completed Lecture Excel Sheet Section */}
             {adminSubTab === 'settlements' && (
               <div className="mt-8 animate-in fade-in duration-300">
                 <div className="p-6 rounded-2xl bg-[#0d0d0f] border border-neutral-800 space-y-5" id="master-completed-excel-sheet">
-                  <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-4 border-b border-neutral-800 pb-4">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-neutral-800 pb-4">
                     <div className="space-y-1">
                       <h3 className="text-sm font-black text-white flex items-center gap-2">
                         <span className="p-1 rounded bg-[#217346]/10 text-[#217346] border border-[#217346]/20">
                           <FileSpreadsheet className="w-4 h-4" />
                         </span>
-                        <span>📊 KPCIA 출강 완료 및 실시간 정산 마스터 대장 (Excel Live Sheet)</span>
+                        <span>📊 KPCIA 출강 완료 및 실시간 정산 마스터 대장 (Live Sheet)</span>
                       </h3>
                       <p className="text-[10px] text-neutral-400">
                         출강 요청 강의 전체 리스트와 실시간 정산 현황 및 정산 기한을 모니터링하는 마스터 회계 대장입니다.
                       </p>
                     </div>
-                    <div className="flex flex-wrap gap-2">
-                      <button
-                        onClick={handleDownloadSettledLecturesExcel}
-                        className="px-3 py-2 rounded-lg bg-emerald-700 hover:bg-emerald-600 border border-emerald-600/30 text-white text-[10px] font-extrabold flex items-center justify-center gap-1.5 transition-all cursor-pointer"
-                        title="정산이 완료된 강의 내역만 엑셀로 다운로드합니다."
-                      >
-                        <Download className="w-3 h-3 text-emerald-300" />
-                        <span>1. 정산 완료 내역 (.xlsx)</span>
-                      </button>
-                      <button
-                        onClick={handleDownloadPendingSettlementLecturesExcel}
-                        className="px-3 py-2 rounded-lg bg-amber-600 hover:bg-amber-500 border border-amber-500/30 text-white text-[10px] font-extrabold flex items-center justify-center gap-1.5 transition-all cursor-pointer"
-                        title="강의가 완료되었으나 정산 이전 상태인 강의 내역을 다운로드합니다."
-                      >
-                        <Download className="w-3 h-3 text-amber-300" />
-                        <span>2. 정산 대기 내역 (.xlsx)</span>
-                      </button>
-                      <button
-                        onClick={handleDownloadCompletedLecturesExcel}
-                        className="px-3 py-2 rounded-lg bg-[#217346] hover:bg-[#1e663e] text-white text-[10px] font-extrabold flex items-center justify-center gap-1.5 transition-all cursor-pointer"
-                        title="전체 출강 완료 목록을 다운로드합니다."
-                      >
-                        <Download className="w-3.5 h-3.5 text-green-300" />
-                        <span>전체 마스터 대장 (.xlsx)</span>
-                      </button>
-                    </div>
-                  </div>
-
-                  {/* Google Sheets Real-Time Sync & Multi-Tab Excel Export Bar */}
-                  <div className="p-4 rounded-xl bg-gradient-to-r from-emerald-950/40 via-neutral-900 to-neutral-900/90 border border-emerald-500/30 flex flex-col md:flex-row md:items-center justify-between gap-3 shadow-sm">
-                    <div className="flex items-center gap-3">
-                      <div className="w-9 h-9 rounded-lg bg-emerald-500/15 border border-emerald-500/30 flex items-center justify-center shrink-0 text-emerald-400">
-                        <FileSpreadsheet className="w-5 h-5 text-emerald-400" />
-                      </div>
-                      <div>
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <h4 className="text-xs font-black text-white flex items-center gap-1.5">
-                            Google 스프레드시트 4대 마스터 대장 연동 및 저장
-                            <span className="text-[9px] bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 px-1.5 py-0.2 rounded font-normal">
-                              연도별 탭 분리 지원
-                            </span>
-                          </h4>
-                          {isGoogleSheetsConnected ? (
-                            <>
-                              <span className="text-[9px] bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 px-2 py-0.5 rounded font-extrabold flex items-center gap-1.5">
-                                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
-                                Google 계정 연동 완료
-                              </span>
-                              {googleConnectedEmail && (
-                                <span className="text-[9px] text-emerald-300 font-bold bg-neutral-850 px-2 py-0.5 rounded border border-neutral-750">
-                                  {googleConnectedEmail}
-                                </span>
-                              )}
-                              {lastGoogleSyncTime && (
-                                <span className="text-[9px] bg-neutral-800 text-emerald-400 border border-emerald-500/30 px-1.5 py-0.5 rounded font-mono">
-                                  최근 동기화: {lastGoogleSyncTime}
-                                </span>
-                              )}
-                            </>
-                          ) : (
-                            <span className="text-[9px] bg-neutral-800 text-neutral-400 border border-neutral-700 px-1.5 py-0.5 rounded font-medium">
-                              Google 계정 미연동
-                            </span>
-                          )}
-                        </div>
-                        <p className="text-[10px] text-neutral-400 mt-0.5">
-                          {isGoogleSheetsConnected ? (
-                            <span>연동 계정: <strong className="text-emerald-300 font-semibold">{googleConnectedEmail}</strong> | 출강 정산 대장(연도별/통합), 소속 강사단, 외부 제휴의뢰, 교육과정 4대 대장이 구글 드라이브 시트에 실시간 기록됩니다.</span>
-                          ) : (
-                            <span>Google 계정을 1회 연동하시면 출강 정산 마스터 대장의 전체 내용이 연도별 탭(2026년, 2025년...)으로 관리자님의 구글 시트에 실시간 자동 동기화됩니다.</span>
-                          )}
-                        </p>
-                      </div>
-                    </div>
-
-                    <div className="flex items-center gap-2 shrink-0 flex-wrap">
-                      {!isGoogleSheetsConnected ? (
-                        <button
-                          type="button"
-                          onClick={handleConnectGoogleSheets}
-                          disabled={isSyncingGoogleSheets}
-                          className="px-3.5 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-extrabold text-xs flex items-center gap-2 transition-all cursor-pointer shadow-md hover:scale-[1.02]"
-                        >
-                          {isSyncingGoogleSheets ? (
-                            <>
-                              <RefreshCw className="w-4 h-4 text-emerald-200 animate-spin" />
-                              <span>Google 연동 중...</span>
-                            </>
-                          ) : (
-                            <>
-                              <FileSpreadsheet className="w-4 h-4 text-emerald-200" />
-                              <span>Google 계정 연동하기</span>
-                            </>
-                          )}
-                        </button>
-                      ) : (
-                        <>
-                          <button
-                            type="button"
-                            onClick={handlePromptSyncAllToGoogleSheets}
-                            disabled={isSyncingGoogleSheets}
-                            className="px-3 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-extrabold text-xs flex items-center gap-1.5 transition-all cursor-pointer shadow-md hover:scale-[1.01]"
-                            title="전체 출강 및 정산 대장을 구글 스프레드시트에 즉시 동기화합니다."
-                          >
-                            {isSyncingGoogleSheets ? (
-                              <>
-                                <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                                <span>시트 동기화 중...</span>
-                              </>
-                            ) : (
-                              <>
-                                <RefreshCw className="w-3.5 h-3.5" />
-                                <span>구글 시트 전체 동기화</span>
-                              </>
-                            )}
-                          </button>
-                          {googleSheetUrl && (
-                            <a
-                              href={googleSheetUrl}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="px-3 py-2 rounded-lg bg-neutral-800 hover:bg-neutral-750 border border-neutral-700 text-[#D4AF37] hover:text-amber-300 font-bold text-xs flex items-center gap-1.5 transition-all cursor-pointer"
-                            >
-                              <ExternalLink className="w-3.5 h-3.5" />
-                              <span>구글 시트 바로 열기</span>
-                            </a>
-                          )}
-                          <button
-                            type="button"
-                            onClick={handleDisconnectGoogleSheets}
-                            className="px-2 py-2 rounded-lg bg-neutral-850 hover:bg-neutral-800 text-neutral-400 hover:text-red-400 transition-colors cursor-pointer border border-neutral-800 text-[10px]"
-                            title="Google 스프레드시트 연동 해제"
-                          >
-                            연동 해제
-                          </button>
-                        </>
-                      )}
-
+                    <div className="flex items-center gap-2">
                       <button
                         type="button"
                         onClick={handlePromptSyncAllToGoogleSheets}
-                        className="px-3 py-2 rounded-lg bg-neutral-800 hover:bg-neutral-750 border border-neutral-700 text-neutral-300 hover:text-white font-bold text-xs flex items-center gap-1.5 cursor-pointer transition-all"
-                        title="4대 대장을 구글 스프레드시트 및 엑셀 호환 통합 파일로 다운로드합니다."
+                        className="px-4 py-2.5 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-extrabold text-xs flex items-center gap-2 transition-all cursor-pointer shadow-lg shadow-emerald-950/40 hover:scale-[1.01]"
+                        title="Google 스프레드시트 4대 마스터 대장 동기화 및 엑셀 다운로드 창을 엽니다."
                       >
-                        <Download className="w-3.5 h-3.5 text-emerald-400" />
-                        <span>통합 엑셀 다운로드</span>
+                        <FileSpreadsheet className="w-4 h-4 text-emerald-100" />
+                        <span>Google 스프레드시트 4대 마스터 대장 동기화 & 엑셀 다운로드</span>
                       </button>
                     </div>
                   </div>
@@ -7796,13 +7659,13 @@ export default function App() {
                   </div>
                   <div>
                     <h3 className="text-sm font-black text-white flex items-center gap-2">
-                      <span>4대 마스터 대장 통합 엑셀(.xlsx) 내보내기</span>
+                      <span>Google 스프레드시트 4대 마스터 대장 동기화 & 엑셀 다운로드</span>
                       <span className="text-[10px] bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 px-2 py-0.5 rounded-full font-bold">
                         선택 {totalSelectedCount}건
                       </span>
                     </h3>
                     <p className="text-[11px] text-neutral-400">
-                      정산 마스터(연도별/통합) · 소속강사단 · 외부 제휴의뢰 · 명품 교육과정 승인대장 엑셀 및 구글 시트 저장
+                      정산 마스터(연도별/통합) · 소속강사단 · 외부 제휴의뢰 · 명품 교육과정 승인대장 엑셀(.xlsx) 다운로드 및 구글 시트 저장
                     </p>
                   </div>
                 </div>
@@ -8147,33 +8010,58 @@ export default function App() {
                 </div>
 
                 {/* Google Connection & Information Card */}
-                <div className="p-3.5 rounded-xl bg-neutral-950 border border-emerald-500/25 space-y-3">
-                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 text-[11px]">
-                    <div className="flex items-center gap-2">
-                      <span className="text-base">{isGoogleSheetsConnected ? '🟢' : '⚪'}</span>
+                <div className="p-4 rounded-xl bg-neutral-950 border border-emerald-500/25 space-y-3.5">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-[11px]">
+                    <div className="flex items-center gap-2.5">
+                      <span className="text-lg">{isGoogleSheetsConnected ? '🟢' : '⚪'}</span>
                       <div>
-                        <span className="text-neutral-400 font-bold">Google 계정 연동: </span>
-                        {isGoogleSheetsConnected ? (
-                          <span className="text-emerald-400 font-extrabold">
-                            연동 완료 ({googleConnectedEmail || 'Google 계정'})
-                          </span>
-                        ) : (
-                          <span className="text-amber-400 font-semibold">
-                            미연동 (아래 버튼으로 로그인 시 구글 드라이브에 시트 자동 생성)
-                          </span>
-                        )}
+                        <div className="flex items-center gap-2">
+                          <span className="text-neutral-300 font-bold">Google 계정 연동 상태:</span>
+                          {isGoogleSheetsConnected ? (
+                            <span className="text-emerald-400 font-extrabold flex items-center gap-1">
+                              <span>연동 완료</span>
+                              <span className="text-[10px] bg-emerald-500/20 text-emerald-300 px-1.5 py-0.5 rounded font-mono">
+                                {googleConnectedEmail || 'Google 계정'}
+                              </span>
+                            </span>
+                          ) : (
+                            <span className="text-amber-400 font-semibold">
+                              미연동 (연동 시 구글 드라이브에 실시간 자동 동기화)
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-[10px] text-neutral-400 mt-0.5">
+                          {isGoogleSheetsConnected 
+                            ? 'Google 스프레드시트와 실시간 양방향 자동 저장이 활성화되어 있습니다.' 
+                            : '원하는 방식으로 구글 계정을 연동해 주세요.'}
+                        </p>
                       </div>
                     </div>
+
                     {!isGoogleSheetsConnected ? (
-                      <button
-                        type="button"
-                        onClick={handleConnectGoogleSheets}
-                        disabled={isSyncingGoogleSheets}
-                        className="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-black text-[10.5px] cursor-pointer transition-all shadow-sm flex items-center gap-1.5"
-                      >
-                        <LogIn className="w-3 h-3" />
-                        <span>Google 계정 연동하기</span>
-                      </button>
+                      <div className="flex flex-wrap sm:flex-nowrap gap-2 items-center">
+                        <button
+                          type="button"
+                          onClick={() => handleConnectGoogleSheets('firebase')}
+                          disabled={isSyncingGoogleSheets}
+                          className="px-3 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-black text-[10.5px] cursor-pointer transition-all shadow-sm flex items-center gap-1.5"
+                          title="Firebase 표준 OAuth 팝업으로 연동합니다."
+                        >
+                          <LogIn className="w-3.5 h-3.5" />
+                          <span>⚡ Google 연동 (Firebase 방식)</span>
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => handleConnectGoogleSheets('gis')}
+                          disabled={isSyncingGoogleSheets}
+                          className="px-3 py-2 rounded-lg bg-neutral-900 hover:bg-neutral-850 border border-emerald-500/40 text-emerald-300 hover:text-white font-bold text-[10.5px] cursor-pointer transition-all shadow-sm flex items-center gap-1.5"
+                          title="Google Cloud Console에 등록하신 Client ID로 연동합니다."
+                        >
+                          <ExternalLink className="w-3.5 h-3.5" />
+                          <span>🌐 GCP 콘솔 등록 Client ID 연동</span>
+                        </button>
+                      </div>
                     ) : (
                       <div className="flex items-center gap-2">
                         {googleSheetUrl && (
@@ -8181,16 +8069,16 @@ export default function App() {
                             href={googleSheetUrl}
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="px-2.5 py-1 rounded-lg bg-neutral-900 hover:bg-neutral-850 border border-neutral-750 text-[#D4AF37] hover:text-amber-300 font-bold text-[10.5px] flex items-center gap-1 transition-all"
+                            className="px-3 py-1.5 rounded-lg bg-neutral-900 hover:bg-neutral-850 border border-neutral-750 text-[#D4AF37] hover:text-amber-300 font-bold text-[10.5px] flex items-center gap-1.5 transition-all shadow-sm"
                           >
-                            <ExternalLink className="w-3 h-3" />
+                            <ExternalLink className="w-3.5 h-3.5" />
                             <span>연결된 구글 시트 열기</span>
                           </a>
                         )}
                         <button
                           type="button"
                           onClick={handleDisconnectGoogleSheets}
-                          className="text-[10px] text-neutral-400 hover:text-red-400 cursor-pointer underline"
+                          className="text-[10px] text-neutral-400 hover:text-red-400 cursor-pointer underline px-1 py-1"
                         >
                           연동 해제
                         </button>
@@ -8198,11 +8086,140 @@ export default function App() {
                     )}
                   </div>
 
-                  <div className="border-t border-neutral-900 pt-2 flex items-start gap-2 text-[10.5px] text-neutral-400 leading-relaxed">
-                    <span className="text-emerald-400 font-bold shrink-0">💡</span>
-                    <span>
-                      동기화 실행 시 관리자님의 구글 드라이브에 <strong className="text-white">KPCIA 마스터 대장 스프레드시트</strong>가 자동 생성되며, 연도별 탭 및 강사단/제휴의뢰/교육과정 대장이 실시간 기록됩니다.
-                    </span>
+                  {/* Diagnostic & Origin Information Bar */}
+                  <div className="bg-neutral-900/90 rounded-lg p-3 border border-neutral-800 text-[10.5px] space-y-2">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1.5 text-neutral-300">
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-emerald-400 font-bold">📍 현재 앱 접속 출처(Origin):</span>
+                        <code className="bg-black/60 px-2 py-0.5 rounded text-amber-300 font-mono text-[10px] select-all border border-neutral-800">
+                          {typeof window !== 'undefined' ? window.location.origin : ''}
+                        </code>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (typeof window !== 'undefined') {
+                            navigator.clipboard.writeText(window.location.origin);
+                            triggerToast("📋 현재 출처 주소(Origin)가 클립보드에 복사되었습니다!", "success");
+                          }
+                        }}
+                        className="px-2 py-1 rounded bg-neutral-800 hover:bg-neutral-700 text-neutral-300 hover:text-white text-[9.5px] font-bold cursor-pointer transition-colors self-start sm:self-auto shrink-0"
+                      >
+                        출처 주소 복사
+                      </button>
+                    </div>
+
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1.5 text-neutral-300">
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-blue-400 font-bold">🔑 적용된 GCP Client ID:</span>
+                        <code className="bg-black/60 px-2 py-0.5 rounded text-neutral-400 font-mono text-[10px] truncate max-w-[260px] sm:max-w-md border border-neutral-800" title={DEFAULT_GCP_CLIENT_ID}>
+                          {DEFAULT_GCP_CLIENT_ID}
+                        </code>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          navigator.clipboard.writeText(DEFAULT_GCP_CLIENT_ID);
+                          triggerToast("📋 Client ID가 클립보드에 복사되었습니다!", "success");
+                        }}
+                        className="px-2 py-1 rounded bg-neutral-800 hover:bg-neutral-700 text-neutral-300 hover:text-white text-[9.5px] font-bold cursor-pointer transition-colors self-start sm:self-auto shrink-0"
+                      >
+                        Client ID 복사
+                      </button>
+                    </div>
+
+                    <div className="pt-1.5 border-t border-neutral-800/80 text-[10px] text-neutral-400 leading-relaxed space-y-1">
+                      <p className="text-amber-300/90 font-semibold flex items-center gap-1">
+                        <span>⏳</span>
+                        <span>
+                          <strong>구글 콘솔 반영 대기 시간 안내:</strong> 구글 클라우드 콘솔에 자바스크립트 원본을 새로 등록/저장하신 후, 구글 글로벌 인증 서버에 반영되기까지 <strong>약 5분~15분</strong> 정도 소요됩니다. (구글 공식 화면 안내: <em>'설정이 적용되는 데 5분에서 몇 시간이 걸릴 수 있습니다'</em>)
+                        </span>
+                      </p>
+                      <p className="text-neutral-400">
+                        • 팝업에서 <strong className="text-red-400">400 origin_mismatch</strong>가 뜰 때 팝업창 안의 <strong>[오류 세부정보]</strong> 링크를 누르시면 구글이 인식한 요청 주소를 직접 확인하실 수 있습니다.
+                      </p>
+                      <p className="text-neutral-400">
+                        • 전파를 기다리는 중에도 아래 <strong>[통합 엑셀(.xlsx) 파일 다운로드]</strong>를 누르시면 4대 마스터 대장을 즉시 내려받아 구글 드라이브나 엑셀에서 바로 사용하실 수 있습니다.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* 📥 4대 마스터 대장 엑셀(.xlsx) 다운로드 전용 섹션 (구글 시트 100% 호환) */}
+                <div className="p-4 rounded-xl bg-gradient-to-r from-emerald-950/40 via-neutral-950 to-neutral-950 border border-emerald-500/35 space-y-3">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                    <div className="space-y-0.5">
+                      <div className="flex items-center gap-2">
+                        <span className="p-1 rounded bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
+                          <Download className="w-3.5 h-3.5" />
+                        </span>
+                        <h4 className="text-xs font-black text-white">
+                          4대 마스터 대장 엑셀(.xlsx) 파일 다운로드
+                        </h4>
+                        <span className="text-[9.5px] bg-emerald-500/20 text-emerald-300 px-2 py-0.2 rounded font-bold border border-emerald-500/30">
+                          구글 스프레드시트 100% 호환
+                        </span>
+                      </div>
+                      <p className="text-[10.5px] text-neutral-400">
+                        인증 절차 없이도 4대 마스터 대장을 다중 시트 탭 엑셀(.xlsx) 파일로 즉시 내려받아 구글 드라이브 및 엑셀에서 바로 열어보실 수 있습니다.
+                      </p>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        GoogleSheetsService.exportMultiTabExcel({
+                          lectures,
+                          users,
+                          proposals,
+                          programs,
+                          syncLectures: googleSyncIncludeLectures,
+                          syncInstructors: googleSyncIncludeInstructors,
+                          syncProposals: googleSyncIncludeProposals,
+                          syncPrograms: googleSyncIncludePrograms,
+                          lectureSyncMode: googleSyncMode,
+                          lectureSyncSelectedYear: googleSyncSelectedYear
+                        });
+                        triggerToast(`📥 선택된 ${totalSelectedCount}건의 4대 대장 통합 엑셀 파일이 다운로드되었습니다!`, "success");
+                      }}
+                      disabled={!anySelected}
+                      className="px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-extrabold text-xs flex items-center justify-center gap-2 transition-all cursor-pointer shadow-md hover:scale-[1.01] shrink-0 disabled:opacity-40 disabled:cursor-not-allowed"
+                    >
+                      <Download className="w-4 h-4 text-emerald-100" />
+                      <span>선택 대장 통합 엑셀 다운로드 ({totalSelectedCount}건)</span>
+                    </button>
+                  </div>
+
+                  {/* Individual Lecture Settlement Excel Quick Buttons */}
+                  <div className="pt-2 border-t border-neutral-850 flex flex-wrap items-center gap-2">
+                    <span className="text-[10px] text-neutral-400 font-bold shrink-0">출강 정산 개별 엑셀 파일:</span>
+                    <button
+                      type="button"
+                      onClick={handleDownloadSettledLecturesExcel}
+                      className="px-2.5 py-1.5 rounded-lg bg-neutral-900 hover:bg-neutral-850 border border-emerald-600/30 text-emerald-300 hover:text-white text-[10px] font-bold flex items-center gap-1.5 transition-colors cursor-pointer"
+                      title="정산 완료된 출강 내역만 엑셀로 다운로드합니다."
+                    >
+                      <Download className="w-3 h-3 text-emerald-400" />
+                      <span>1. 정산 완료 내역 (.xlsx)</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleDownloadPendingSettlementLecturesExcel}
+                      className="px-2.5 py-1.5 rounded-lg bg-neutral-900 hover:bg-neutral-850 border border-amber-500/30 text-amber-300 hover:text-white text-[10px] font-bold flex items-center gap-1.5 transition-colors cursor-pointer"
+                      title="정산 대기 중인 출강 내역을 다운로드합니다."
+                    >
+                      <Download className="w-3 h-3 text-amber-400" />
+                      <span>2. 정산 대기 내역 (.xlsx)</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleDownloadCompletedLecturesExcel}
+                      className="px-2.5 py-1.5 rounded-lg bg-neutral-900 hover:bg-neutral-850 border border-neutral-750 text-neutral-300 hover:text-white text-[10px] font-bold flex items-center gap-1.5 transition-colors cursor-pointer"
+                      title="전체 출강 완료 목록을 다운로드합니다."
+                    >
+                      <Download className="w-3 h-3 text-green-400" />
+                      <span>3. 전체 출강 마스터 대장 (.xlsx)</span>
+                    </button>
                   </div>
                 </div>
 
@@ -8227,10 +8244,11 @@ export default function App() {
                     });
                     triggerToast("📥 4대 대장 통합 엑셀 파일이 다운로드되었습니다!", "success");
                   }}
-                  className="px-3.5 py-2 rounded-xl bg-neutral-900 hover:bg-neutral-850 border border-neutral-800 text-neutral-300 hover:text-white font-bold cursor-pointer text-xs transition-colors flex items-center gap-1.5"
-                  title="인증 없이 즉시 4대 대장을 구글 시트 호환 엑셀 파일로 다운로드합니다."
+                  disabled={!anySelected}
+                  className="px-4 py-2.5 rounded-xl bg-neutral-900 hover:bg-neutral-850 border border-emerald-500/40 text-emerald-300 hover:text-white font-extrabold cursor-pointer text-xs transition-colors flex items-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed"
+                  title="선택한 4대 마스터 대장을 구글 시트 100% 호환 엑셀 파일로 즉시 다운로드합니다."
                 >
-                  <Download className="w-3.5 h-3.5 text-emerald-400" />
+                  <Download className="w-4 h-4 text-emerald-400" />
                   <span>통합 엑셀(.xlsx) 파일 다운로드</span>
                 </button>
 
@@ -8239,7 +8257,7 @@ export default function App() {
                     type="button"
                     onClick={() => setShowGoogleSyncModal(false)}
                     disabled={isSyncingGoogleSheets}
-                    className="px-4 py-2 rounded-xl bg-neutral-800 hover:bg-neutral-750 text-neutral-300 font-bold cursor-pointer disabled:opacity-50 text-xs transition-colors"
+                    className="px-4 py-2.5 rounded-xl bg-neutral-800 hover:bg-neutral-750 text-neutral-300 font-bold cursor-pointer disabled:opacity-50 text-xs transition-colors"
                   >
                     닫기
                   </button>
