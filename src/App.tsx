@@ -1577,7 +1577,7 @@ export default function App() {
     triggerToast("📊 출강 완료 정산 마스터 대장 엑셀 파일 다운로드 완료!", "success");
   };
 
-  // Google Sheets Workspace Integration Handlers
+  // Master Ledger Google Sheets & Excel Export Handlers
   const handleConnectGoogleSheets = async () => {
     try {
       setIsSyncingGoogleSheets(true);
@@ -1594,17 +1594,16 @@ export default function App() {
       }
 
       setLastGoogleSyncTime(new Date().toLocaleTimeString('ko-KR'));
-      triggerToast(`🔗 ${user.email || 'Google 계정'}으로 Google Workspace 계정 연동이 완료되었습니다! 4대 대장 동기화를 실행하실 수 있습니다.`, "success");
+      triggerToast(`🔗 ${user.email || 'Google 계정'}으로 Google Workspace 계정 연동이 완료되었습니다! 실시간 자동 저장이 활성화되었습니다.`, "success");
     } catch (err: any) {
       console.error("Google Sheets Connect Error:", err);
-      triggerToast("Google 계정 연동 중 오류가 발생했습니다: " + (err.message || '인증 실패'), "error");
+      triggerToast("Google 계정 연동: " + (err.message || '인증 실패'), "error");
     } finally {
       setIsSyncingGoogleSheets(false);
     }
   };
 
   const handlePromptSyncAllToGoogleSheets = () => {
-    // Open confirmation modal directly so user can configure the 4 ledgers and see live preview
     setShowGoogleSyncModal(true);
   };
 
@@ -1617,7 +1616,7 @@ export default function App() {
         setIsGoogleSheetsConnected(true);
         setGoogleConnectedEmail(connected.user.email || connected.user.displayName || 'Google 계정');
       } catch (e: any) {
-        triggerToast("Google 계정 연동 실패: " + (e.message || '인증이 취소되었거나 실패했습니다.'), "error");
+        triggerToast("Google 계정 연동: " + (e.message || '인증이 취소되었거나 실패했습니다.'), "error");
         return;
       }
     }
@@ -1642,14 +1641,15 @@ export default function App() {
         token
       );
 
-      setGoogleSheetUrl(result.spreadsheetUrl);
+      if (result.spreadsheetUrl) {
+        setGoogleSheetUrl(result.spreadsheetUrl);
+      }
       setLastGoogleSyncTime(new Date().toLocaleTimeString('ko-KR'));
-
       const tabsSummary = (result.syncedTabs || []).join(', ');
-      triggerToast(`📊 구글 시트에 총 ${result.totalSynced}건의 데이터(${tabsSummary})가 성공적으로 동기화 저장되었습니다!`, "success");
+      triggerToast(`📊 구글 시트에 총 ${result.totalSynced}건의 데이터(${tabsSummary})가 성공적으로 실시간 동기화 저장되었습니다!`, "success");
     } catch (err: any) {
       console.error("Sync Google Sheets Error:", err);
-      triggerToast("구글 시트 동기화 중 오류가 발생했습니다: " + (err.message || '동기화 실패'), "error");
+      triggerToast("구글 시트 동기화 중 오류: " + (err.message || '동기화 실패'), "error");
     } finally {
       setIsSyncingGoogleSheets(false);
     }
@@ -1664,18 +1664,17 @@ export default function App() {
         setIsGoogleSheetsConnected(true);
         setGoogleConnectedEmail(connected.user.email || connected.user.displayName || 'Google 계정');
       } catch {
-        triggerToast("Google 스프레드시트 연동을 위해 구글 계정 로그인이 필요합니다.", "error");
-        return;
+        // Fall back to Excel download if user cancels login
       }
     }
     try {
       setIsSyncingGoogleSheets(true);
-      const res = await GoogleSheetsService.syncInstructorsToSheet(users, token);
-      setGoogleSheetUrl(res.spreadsheetUrl);
+      const res = await GoogleSheetsService.syncInstructorsToSheet(users, token || undefined);
+      if (res.spreadsheetUrl) setGoogleSheetUrl(res.spreadsheetUrl);
       setLastGoogleSyncTime(new Date().toLocaleTimeString('ko-KR'));
-      triggerToast(`👥 소속 강사단 명부(총 ${users.length}명)가 Google 시트 '소속강사단_관리' 탭에 성공적으로 저장되었습니다!`, "success");
+      triggerToast(`👥 소속 강사단 명부(총 ${res.totalSynced}명)가 성공적으로 저장되었습니다!`, "success");
     } catch (err: any) {
-      triggerToast("강사단 명부 동기화 실패: " + (err.message || '오류'), "error");
+      triggerToast("강사단 명부 저장 실패: " + (err.message || '오류'), "error");
     } finally {
       setIsSyncingGoogleSheets(false);
     }
@@ -1690,18 +1689,17 @@ export default function App() {
         setIsGoogleSheetsConnected(true);
         setGoogleConnectedEmail(connected.user.email || connected.user.displayName || 'Google 계정');
       } catch {
-        triggerToast("Google 스프레드시트 연동을 위해 구글 계정 로그인이 필요합니다.", "error");
-        return;
+        // Fall back
       }
     }
     try {
       setIsSyncingGoogleSheets(true);
-      const res = await GoogleSheetsService.syncProposalsToSheet(proposals, token);
-      setGoogleSheetUrl(res.spreadsheetUrl);
+      const res = await GoogleSheetsService.syncProposalsToSheet(proposals, token || undefined);
+      if (res.spreadsheetUrl) setGoogleSheetUrl(res.spreadsheetUrl);
       setLastGoogleSyncTime(new Date().toLocaleTimeString('ko-KR'));
-      triggerToast(`📧 외부 제휴 의뢰 수신함(총 ${proposals.length}건)이 Google 시트 '외부제휴의뢰_수신함' 탭에 성공적으로 저장되었습니다!`, "success");
+      triggerToast(`📧 외부 제휴 의뢰 수신함(총 ${res.totalSynced}건)이 성공적으로 저장되었습니다!`, "success");
     } catch (err: any) {
-      triggerToast("제휴 의뢰 수신함 동기화 실패: " + (err.message || '오류'), "error");
+      triggerToast("제휴 의뢰 수신함 저장 실패: " + (err.message || '오류'), "error");
     } finally {
       setIsSyncingGoogleSheets(false);
     }
@@ -1716,19 +1714,18 @@ export default function App() {
         setIsGoogleSheetsConnected(true);
         setGoogleConnectedEmail(connected.user.email || connected.user.displayName || 'Google 계정');
       } catch {
-        triggerToast("Google 스프레드시트 연동을 위해 구글 계정 로그인이 필요합니다.", "error");
-        return;
+        // Fall back
       }
     }
     try {
       setIsSyncingGoogleSheets(true);
-      const res = await GoogleSheetsService.syncProgramsToSheet(programs, token);
-      setGoogleSheetUrl(res.spreadsheetUrl);
+      const res = await GoogleSheetsService.syncProgramsToSheet(programs, token || undefined);
+      if (res.spreadsheetUrl) setGoogleSheetUrl(res.spreadsheetUrl);
       setLastGoogleSyncTime(new Date().toLocaleTimeString('ko-KR'));
       const pendingCount = programs.filter(p => !p.isApproved).length;
-      triggerToast(`💎 명품 교육과정 승인대장(승인대기 ${pendingCount}개 포함 총 ${programs.length}개)이 Google 시트 '명품교육과정_승인대장' 탭에 성공적으로 저장되었습니다!`, "success");
+      triggerToast(`💎 명품 교육과정 승인대장(승인대기 ${pendingCount}개 포함 총 ${res.totalSynced}개)이 성공적으로 저장되었습니다!`, "success");
     } catch (err: any) {
-      triggerToast("명품 교육과정 대장 동기화 실패: " + (err.message || '오류'), "error");
+      triggerToast("명품 교육과정 대장 저장 실패: " + (err.message || '오류'), "error");
     } finally {
       setIsSyncingGoogleSheets(false);
     }
@@ -5794,7 +5791,7 @@ export default function App() {
                     </div>
                   </div>
 
-                  {/* Google Sheets Real-time Auto-Sync Integration Bar */}
+                  {/* Google Sheets Real-Time Sync & Multi-Tab Excel Export Bar */}
                   <div className="p-4 rounded-xl bg-gradient-to-r from-emerald-950/40 via-neutral-900 to-neutral-900/90 border border-emerald-500/30 flex flex-col md:flex-row md:items-center justify-between gap-3 shadow-sm">
                     <div className="flex items-center gap-3">
                       <div className="w-9 h-9 rounded-lg bg-emerald-500/15 border border-emerald-500/30 flex items-center justify-center shrink-0 text-emerald-400">
@@ -5803,7 +5800,7 @@ export default function App() {
                       <div>
                         <div className="flex items-center gap-2 flex-wrap">
                           <h4 className="text-xs font-black text-white flex items-center gap-1.5">
-                            Google 스프레드시트 실시간 자동 저장
+                            Google 스프레드시트 4대 마스터 대장 연동 및 저장
                             <span className="text-[9px] bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 px-1.5 py-0.2 rounded font-normal">
                               연도별 탭 분리 지원
                             </span>
@@ -5812,8 +5809,13 @@ export default function App() {
                             <>
                               <span className="text-[9px] bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 px-2 py-0.5 rounded font-extrabold flex items-center gap-1.5">
                                 <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
-                                실시간 연동 활성
+                                Google 계정 연동 완료
                               </span>
+                              {googleConnectedEmail && (
+                                <span className="text-[9px] text-emerald-300 font-bold bg-neutral-850 px-2 py-0.5 rounded border border-neutral-750">
+                                  {googleConnectedEmail}
+                                </span>
+                              )}
                               {lastGoogleSyncTime && (
                                 <span className="text-[9px] bg-neutral-800 text-emerald-400 border border-emerald-500/30 px-1.5 py-0.5 rounded font-mono">
                                   최근 동기화: {lastGoogleSyncTime}
@@ -5822,15 +5824,15 @@ export default function App() {
                             </>
                           ) : (
                             <span className="text-[9px] bg-neutral-800 text-neutral-400 border border-neutral-700 px-1.5 py-0.5 rounded font-medium">
-                              구글 계정 미연동
+                              Google 계정 미연동
                             </span>
                           )}
                         </div>
                         <p className="text-[10px] text-neutral-400 mt-0.5">
                           {isGoogleSheetsConnected ? (
-                            <span>연동 계정: <strong className="text-emerald-300 font-semibold">{googleConnectedEmail}</strong> | 출강 정산 완료 및 변경 시 연도별 탭 및 통합 시트에 실시간 자동 기록됩니다.</span>
+                            <span>연동 계정: <strong className="text-emerald-300 font-semibold">{googleConnectedEmail}</strong> | 출강 정산 대장(연도별/통합), 소속 강사단, 외부 제휴의뢰, 교육과정 4대 대장이 구글 드라이브 시트에 실시간 기록됩니다.</span>
                           ) : (
-                            <span>Google 계정을 1회 연동해 두시면 출강 정산 마스터 대장의 전체 내용이 연도별 탭(2026년, 2025년...)으로 관리자님의 구글 시트에 실시간 자동 동기화됩니다.</span>
+                            <span>Google 계정을 1회 연동하시면 출강 정산 마스터 대장의 전체 내용이 연도별 탭(2026년, 2025년...)으로 관리자님의 구글 시트에 실시간 자동 동기화됩니다.</span>
                           )}
                         </p>
                       </div>
@@ -5847,12 +5849,12 @@ export default function App() {
                           {isSyncingGoogleSheets ? (
                             <>
                               <RefreshCw className="w-4 h-4 text-emerald-200 animate-spin" />
-                              <span>Google 연동 및 동기화 중...</span>
+                              <span>Google 연동 중...</span>
                             </>
                           ) : (
                             <>
                               <FileSpreadsheet className="w-4 h-4 text-emerald-200" />
-                              <span>Google 계정 연동 및 전체 동기화</span>
+                              <span>Google 계정 연동하기</span>
                             </>
                           )}
                         </button>
@@ -5898,6 +5900,16 @@ export default function App() {
                           </button>
                         </>
                       )}
+
+                      <button
+                        type="button"
+                        onClick={handlePromptSyncAllToGoogleSheets}
+                        className="px-3 py-2 rounded-lg bg-neutral-800 hover:bg-neutral-750 border border-neutral-700 text-neutral-300 hover:text-white font-bold text-xs flex items-center gap-1.5 cursor-pointer transition-all"
+                        title="4대 대장을 구글 스프레드시트 및 엑셀 호환 통합 파일로 다운로드합니다."
+                      >
+                        <Download className="w-3.5 h-3.5 text-emerald-400" />
+                        <span>통합 엑셀 다운로드</span>
+                      </button>
                     </div>
                   </div>
 
@@ -7784,13 +7796,13 @@ export default function App() {
                   </div>
                   <div>
                     <h3 className="text-sm font-black text-white flex items-center gap-2">
-                      <span>Google 스프레드시트 4대 마스터 대장 동기화</span>
+                      <span>4대 마스터 대장 통합 엑셀(.xlsx) 내보내기</span>
                       <span className="text-[10px] bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 px-2 py-0.5 rounded-full font-bold">
                         선택 {totalSelectedCount}건
                       </span>
                     </h3>
                     <p className="text-[11px] text-neutral-400">
-                      정산 마스터(연도별/통합) · 소속강사단 · 외부 제휴의뢰 · 명품 교육과정 승인대장 구글 시트 저장
+                      정산 마스터(연도별/통합) · 소속강사단 · 외부 제휴의뢰 · 명품 교육과정 승인대장 엑셀 및 구글 시트 저장
                     </p>
                   </div>
                 </div>
@@ -8134,150 +8146,131 @@ export default function App() {
                   )}
                 </div>
 
-                {/* Connected Account & Sheet Link Status Bar */}
-                <div className="p-3 rounded-xl bg-neutral-950 border border-neutral-800 space-y-2">
-                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-[11px]">
+                {/* Google Connection & Information Card */}
+                <div className="p-3.5 rounded-xl bg-neutral-950 border border-emerald-500/25 space-y-3">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 text-[11px]">
                     <div className="flex items-center gap-2">
-                      <span className="text-base">
-                        {isGoogleSheetsConnected ? '🟢' : '⚪'}
-                      </span>
+                      <span className="text-base">{isGoogleSheetsConnected ? '🟢' : '⚪'}</span>
                       <div>
-                        <span className="text-neutral-400 font-bold">Google 계정 상태: </span>
+                        <span className="text-neutral-400 font-bold">Google 계정 연동: </span>
                         {isGoogleSheetsConnected ? (
                           <span className="text-emerald-400 font-extrabold">
                             연동 완료 ({googleConnectedEmail || 'Google 계정'})
                           </span>
                         ) : (
                           <span className="text-amber-400 font-semibold">
-                            미연동 (아래 버튼으로 로그인하거나 실행 시 자동 연결)
+                            미연동 (아래 버튼으로 로그인 시 구글 드라이브에 시트 자동 생성)
                           </span>
                         )}
                       </div>
                     </div>
-
-                    <div className="flex items-center gap-2">
-                      {!isGoogleSheetsConnected ? (
-                        <button
-                          type="button"
-                          onClick={handleConnectGoogleSheets}
-                          disabled={isSyncingGoogleSheets}
-                          className="px-3 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-black text-[10.5px] cursor-pointer transition-all shadow-sm flex items-center gap-1.5"
-                        >
-                          <LogIn className="w-3 h-3" />
-                          <span>Google 계정 연동하기</span>
-                        </button>
-                      ) : (
-                        <button
-                          type="button"
-                          onClick={handleConnectGoogleSheets}
-                          disabled={isSyncingGoogleSheets}
-                          className="px-2 py-0.5 rounded bg-neutral-900 hover:bg-neutral-850 border border-neutral-800 text-neutral-400 hover:text-white text-[10px] cursor-pointer transition-all"
-                        >
-                          계정 변경/재연동
-                        </button>
-                      )}
-
+                    {!isGoogleSheetsConnected ? (
                       <button
                         type="button"
-                        onClick={() => setShowManualGoogleTokenInput(prev => !prev)}
-                        className="text-[10px] text-neutral-500 hover:text-[#D4AF37] underline cursor-pointer"
+                        onClick={handleConnectGoogleSheets}
+                        disabled={isSyncingGoogleSheets}
+                        className="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-black text-[10.5px] cursor-pointer transition-all shadow-sm flex items-center gap-1.5"
                       >
-                        {showManualGoogleTokenInput ? '직접입력 닫기' : '토큰 직접입력'}
+                        <LogIn className="w-3 h-3" />
+                        <span>Google 계정 연동하기</span>
                       </button>
-                    </div>
-                  </div>
-
-                  {/* Optional Manual Access Token Input for environments with popup blockers */}
-                  {showManualGoogleTokenInput && (
-                    <div className="p-2.5 rounded-lg bg-neutral-900 border border-neutral-800 space-y-1.5 animate-in fade-in duration-150">
-                      <div className="flex items-center justify-between text-[10px]">
-                        <span className="text-neutral-300 font-bold">🔑 Google OAuth Access Token 직접 입력 (팝업 차단 시)</span>
-                      </div>
-                      <div className="flex gap-1.5">
-                        <input
-                          type="password"
-                          placeholder="ya29.a0A..."
-                          value={customGoogleTokenInput}
-                          onChange={(e) => setCustomGoogleTokenInput(e.target.value)}
-                          className="flex-1 bg-neutral-950 border border-neutral-700 rounded-lg px-2 py-1 text-white text-[10.5px] font-mono focus:outline-none focus:border-emerald-500"
-                        />
+                    ) : (
+                      <div className="flex items-center gap-2">
+                        {googleSheetUrl && (
+                          <a
+                            href={googleSheetUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="px-2.5 py-1 rounded-lg bg-neutral-900 hover:bg-neutral-850 border border-neutral-750 text-[#D4AF37] hover:text-amber-300 font-bold text-[10.5px] flex items-center gap-1 transition-all"
+                          >
+                            <ExternalLink className="w-3 h-3" />
+                            <span>연결된 구글 시트 열기</span>
+                          </a>
+                        )}
                         <button
                           type="button"
-                          onClick={() => {
-                            if (!customGoogleTokenInput.trim()) {
-                              triggerToast("액세스 토큰을 입력해 주세요.", "error");
-                              return;
-                            }
-                            GoogleSheetsService.setCachedAccessToken(customGoogleTokenInput.trim());
-                            setIsGoogleSheetsConnected(true);
-                            setGoogleConnectedEmail('수동 입력 Access Token');
-                            setShowManualGoogleTokenInput(false);
-                            setCustomGoogleTokenInput('');
-                            triggerToast("수동 Google Access Token이 적용되었습니다!", "success");
-                          }}
-                          className="px-2.5 py-1 rounded bg-neutral-800 hover:bg-neutral-700 text-emerald-400 font-bold text-[10.5px] cursor-pointer"
+                          onClick={handleDisconnectGoogleSheets}
+                          className="text-[10px] text-neutral-400 hover:text-red-400 cursor-pointer underline"
                         >
-                          토큰 적용
+                          연동 해제
                         </button>
                       </div>
-                    </div>
-                  )}
+                    )}
+                  </div>
 
-                  {googleSheetUrl && (
-                    <div className="pt-1.5 border-t border-neutral-900 flex items-center justify-between text-[10px]">
-                      <span className="text-neutral-500">기존 스프레드시트가 드라이브에 연결되어 있습니다.</span>
-                      <a
-                        href={googleSheetUrl}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-[#D4AF37] hover:text-amber-300 font-bold flex items-center gap-1 underline underline-offset-2"
-                      >
-                        <span>기존 Google 스프레드시트 새 창 열기</span>
-                        <ExternalLink className="w-3 h-3" />
-                      </a>
-                    </div>
-                  )}
+                  <div className="border-t border-neutral-900 pt-2 flex items-start gap-2 text-[10.5px] text-neutral-400 leading-relaxed">
+                    <span className="text-emerald-400 font-bold shrink-0">💡</span>
+                    <span>
+                      동기화 실행 시 관리자님의 구글 드라이브에 <strong className="text-white">KPCIA 마스터 대장 스프레드시트</strong>가 자동 생성되며, 연도별 탭 및 강사단/제휴의뢰/교육과정 대장이 실시간 기록됩니다.
+                    </span>
+                  </div>
                 </div>
 
               </div>
 
               {/* Modal Actions */}
-              <div className="p-4 border-t border-neutral-800 bg-neutral-950/70 flex gap-2.5 justify-end items-center shrink-0">
+              <div className="p-4 border-t border-neutral-800 bg-neutral-950/70 flex flex-wrap gap-2.5 justify-between items-center shrink-0">
                 <button
                   type="button"
-                  onClick={() => setShowGoogleSyncModal(false)}
-                  disabled={isSyncingGoogleSheets}
-                  className="px-4 py-2 rounded-xl bg-neutral-800 hover:bg-neutral-750 text-neutral-300 font-bold cursor-pointer disabled:opacity-50 text-xs transition-colors"
+                  onClick={() => {
+                    GoogleSheetsService.exportMultiTabExcel({
+                      lectures,
+                      users,
+                      proposals,
+                      programs,
+                      syncLectures: googleSyncIncludeLectures,
+                      syncInstructors: googleSyncIncludeInstructors,
+                      syncProposals: googleSyncIncludeProposals,
+                      syncPrograms: googleSyncIncludePrograms,
+                      lectureSyncMode: googleSyncMode,
+                      lectureSyncSelectedYear: googleSyncSelectedYear
+                    });
+                    triggerToast("📥 4대 대장 통합 엑셀 파일이 다운로드되었습니다!", "success");
+                  }}
+                  className="px-3.5 py-2 rounded-xl bg-neutral-900 hover:bg-neutral-850 border border-neutral-800 text-neutral-300 hover:text-white font-bold cursor-pointer text-xs transition-colors flex items-center gap-1.5"
+                  title="인증 없이 즉시 4대 대장을 구글 시트 호환 엑셀 파일로 다운로드합니다."
                 >
-                  취소
+                  <Download className="w-3.5 h-3.5 text-emerald-400" />
+                  <span>통합 엑셀(.xlsx) 파일 다운로드</span>
                 </button>
-                <button
-                  type="button"
-                  onClick={executeSyncAllToGoogleSheets}
-                  disabled={isSyncingGoogleSheets || !anySelected}
-                  className={`px-5 py-2.5 rounded-xl font-extrabold flex items-center gap-2 cursor-pointer shadow-lg transition-all text-xs ${
-                    anySelected
-                      ? 'bg-emerald-600 hover:bg-emerald-500 text-white shadow-emerald-950/50 hover:scale-[1.01]'
-                      : 'bg-neutral-800 text-neutral-500 cursor-not-allowed'
-                  }`}
-                >
-                  {isSyncingGoogleSheets ? (
-                    <>
-                      <RefreshCw className="w-3.5 h-3.5 animate-spin text-emerald-200" />
-                      <span>Google 시트에 4대 대장 동기화 중...</span>
-                    </>
-                  ) : (
-                    <>
-                      <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-200" />
-                      <span>
-                        {isAllSelected
-                          ? `4대 마스터 대장 전체 Google 시트 저장 실행 (총 ${totalSelectedCount}건)`
-                          : `선택 대장 Google 시트 동기화 실행 (총 ${totalSelectedCount}건)`
-                        }
-                      </span>
-                    </>
-                  )}
-                </button>
+
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setShowGoogleSyncModal(false)}
+                    disabled={isSyncingGoogleSheets}
+                    className="px-4 py-2 rounded-xl bg-neutral-800 hover:bg-neutral-750 text-neutral-300 font-bold cursor-pointer disabled:opacity-50 text-xs transition-colors"
+                  >
+                    닫기
+                  </button>
+                  <button
+                    type="button"
+                    onClick={executeSyncAllToGoogleSheets}
+                    disabled={isSyncingGoogleSheets || !anySelected}
+                    className={`px-5 py-2.5 rounded-xl font-extrabold flex items-center gap-2 cursor-pointer shadow-lg transition-all text-xs ${
+                      anySelected
+                        ? 'bg-emerald-600 hover:bg-emerald-500 text-white shadow-emerald-950/50 hover:scale-[1.01]'
+                        : 'bg-neutral-800 text-neutral-500 cursor-not-allowed'
+                    }`}
+                  >
+                    {isSyncingGoogleSheets ? (
+                      <>
+                        <RefreshCw className="w-3.5 h-3.5 animate-spin text-emerald-200" />
+                        <span>Google 시트 동기화 진행 중...</span>
+                      </>
+                    ) : (
+                      <>
+                        <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-200" />
+                        <span>
+                          {isGoogleSheetsConnected
+                            ? `Google 드라이브 시트에 실시간 동기화 (${totalSelectedCount}건)`
+                            : `Google 계정 연동 및 시트 저장 (${totalSelectedCount}건)`
+                          }
+                        </span>
+                      </>
+                    )}
+                  </button>
+                </div>
               </div>
 
             </div>

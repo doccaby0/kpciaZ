@@ -1,15 +1,12 @@
 import { GoogleAuthProvider, signInWithPopup, onAuthStateChanged, User } from 'firebase/auth';
 import { auth } from './firebase';
 import { LectureRequest, UserProfile, EducationalProgram, PartnershipProposal } from '../types';
-import firebaseConfig from '../../firebase-applet-config.json';
+import * as XLSX from 'xlsx';
 
 export const WORKSPACE_SCOPES = [
   'https://www.googleapis.com/auth/spreadsheets',
   'https://www.googleapis.com/auth/drive.file'
 ];
-
-// Helper delay to avoid Google Sheets API rate-limiting (429 Quota Exceeded)
-const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
 // In-memory access token cache (Per workspace-integration skill guidelines: DO NOT store in localStorage/sessionStorage)
 let cachedAccessToken: string | null = null;
@@ -17,6 +14,10 @@ let isSigningIn = false;
 
 const provider = new GoogleAuthProvider();
 WORKSPACE_SCOPES.forEach(scope => provider.addScope(scope));
+provider.setCustomParameters({ prompt: 'select_account' });
+
+// Helper delay to avoid Google Sheets API rate-limiting
+const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
 export type GoogleSyncMode = 'all_by_year' | 'single_year' | 'single_sheet';
 
@@ -82,61 +83,35 @@ export class GoogleSheetsService {
 
   /**
    * Connect Google Account with popup to request Google Sheets & Drive permissions
-   * Prioritizes Firebase Auth signInWithPopup using the authorized authDomain to avoid 400 origin_mismatch
+   * Uses Google Identity Services (GIS) Token Client with user newly created Client ID
    */
   static async connectGoogleAccount(): Promise<{ user: { email?: string; displayName?: string }; accessToken: string }> {
     isSigningIn = true;
+    const clientId = '781281314481-a9ukmlpuivgldqqnqk9602mc3i01ccl0.apps.googleusercontent.com';
 
-    // 1. Primary: Firebase Auth signInWithPopup with GoogleAuthProvider
-    // Uses the authorized Firebase authDomain (gen-lang-client-0519834986.firebaseapp.com)
-    // which completely resolves 400 origin_mismatch errors.
-    if (auth) {
-      try {
-        const result = await signInWithPopup(auth, provider);
-        const credential = GoogleAuthProvider.credentialFromResult(result);
-        if (!credential?.accessToken) {
-          throw new Error('Google 인증 토큰(Access Token)을 수신하지 못했습니다.');
-        }
-        cachedAccessToken = credential.accessToken;
-        isSigningIn = false;
-        return {
-          user: {
-            email: result.user.email || 'Google 계정',
-            displayName: result.user.displayName || 'Google 사용자'
-          },
-          accessToken: cachedAccessToken
-        };
-      } catch (fbError: any) {
-        console.warn('Firebase Auth Sign-in Error:', fbError);
-        const code = fbError?.code;
-        if (code === 'auth/popup-closed-by-user') {
-          isSigningIn = false;
-          throw new Error('Google 로그인 팝업 창이 닫혔습니다. 다시 시도해 주세요.');
-        } else if (code === 'auth/popup-blocked') {
-          isSigningIn = false;
-          throw new Error('브라우저에서 Google 로그인 팝업창이 차단되었습니다. 주소창의 팝업 차단을 해제하시거나 [토큰 직접입력]을 이용해 주세요.');
-        }
-      }
-    }
-
-    // 2. Fallback: Google Identity Services (GIS) Token Client
-    const clientId = (firebaseConfig as any).oAuthClientId || '286813651786-833ulob4q2uaeoe1co0har47cif5srjf.apps.googleusercontent.com';
+    // 1. Primary: Use Google Identity Services (GIS) Token Client with the newly registered client_id
     const google = typeof window !== 'undefined' ? (window as any).google : null;
-    if (google?.accounts?.oauth2 && clientId) {
+    if (google?.accounts?.oauth2) {
       try {
-        const gisToken = await new Promise<{ accessToken: string; email?: string; displayName?: string }>((resolve, reject) => {
-          const client = google.accounts.oauth2.initTokenClient({
-            client_id: clientId,
-            scope: [
-              ...WORKSPACE_SCOPES,
-              'https://www.googleapis.com/auth/userinfo.email',
-              'https://www.googleapis.com/auth/userinfo.profile'
-            ].join(' '),
-            prompt: 'select_account',
-            callback: async (resp: any) => {
-              if (resp.error) {
-                reject(new Error(resp.error_description || resp.error || 'Google 계정 인증에 실패했습니다.'));
-              } else if (resp.access_token) {
+        const gisResult = await new Promise<{ accessToken: string; email?: string; displayName?: string }>((resolve, reject) => {
+          try {
+            const client = google.accounts.oauth2.initTokenClient({
+              client_id: clientId,
+              scope: [
+                ...WORKSPACE_SCOPES,
+                'https://www.googleapis.com/auth/userinfo.email',
+                'https://www.googleapis.com/auth/userinfo.profile'
+              ].join(' '),
+              prompt: 'select_account',
+              callback: async (resp: any) => {
+                if (resp.error) {
+                  reject(new Error(resp.error_description || resp.error || 'Google 계정 인증에 실패했습니다.'));
+                  return;
+                }
+                if (!resp.access_token) {
+                  reject(new Error('Google 액세스 토큰을 수신하지 못했습니다.'));
+                  return;
+                }
                 let email = '';
                 let displayName = '';
                 try {
@@ -152,33 +127,66 @@ export class GoogleSheetsService {
                   // Ignore userinfo failure
                 }
                 resolve({ accessToken: resp.access_token, email, displayName });
-              } else {
-                reject(new Error('Google 액세스 토큰을 수신하지 못했습니다.'));
+              },
+              error_callback: (err: any) => {
+                reject(new Error(err?.message || 'Google 로그인 팝업 창이 닫혔거나 차단되었습니다.'));
               }
-            },
-            error_callback: (err: any) => {
-              reject(new Error(err?.message || 'Google 로그인 팝업 창이 차단되었거나 실패했습니다. 브라우저 팝업 허용을 확인해 주세요.'));
-            }
-          });
-          client.requestAccessToken({ prompt: 'select_account' });
+            });
+            client.requestAccessToken({ prompt: 'select_account' });
+          } catch (initErr: any) {
+            reject(initErr);
+          }
         });
 
-        cachedAccessToken = gisToken.accessToken;
+        cachedAccessToken = gisResult.accessToken;
         isSigningIn = false;
         return {
           user: {
-            email: gisToken.email || 'Google 연동 계정',
-            displayName: gisToken.displayName || 'Google 사용자'
+            email: gisResult.email || 'Google 연동 계정',
+            displayName: gisResult.displayName || 'Google 사용자'
           },
-          accessToken: gisToken.accessToken
+          accessToken: gisResult.accessToken
         };
-      } catch (gisError: any) {
-        console.warn("GIS direct client fallback failed:", gisError);
+      } catch (gisErr: any) {
+        console.warn("GIS token client fallback:", gisErr);
+        if (gisErr?.message?.includes('popup_closed') || gisErr?.message?.includes('창이 닫혔')) {
+          isSigningIn = false;
+          throw new Error('Google 로그인 팝업 창이 닫혔습니다. 다시 시도해 주세요.');
+        }
+      }
+    }
+
+    // 2. Secondary fallback: Firebase Auth signInWithPopup
+    if (auth) {
+      try {
+        const result = await signInWithPopup(auth, provider);
+        const credential = GoogleAuthProvider.credentialFromResult(result);
+        if (credential?.accessToken) {
+          cachedAccessToken = credential.accessToken;
+          isSigningIn = false;
+          return {
+            user: {
+              email: result.user.email || 'Google 계정',
+              displayName: result.user.displayName || 'Google 사용자'
+            },
+            accessToken: cachedAccessToken
+          };
+        }
+      } catch (fbError: any) {
+        console.warn('Firebase Auth Sign-in Error:', fbError);
+        const code = fbError?.code;
+        if (code === 'auth/popup-closed-by-user') {
+          isSigningIn = false;
+          throw new Error('Google 로그인 팝업 창이 닫혔습니다. 다시 시도해 주세요.');
+        } else if (code === 'auth/popup-blocked') {
+          isSigningIn = false;
+          throw new Error('브라우저에서 Google 로그인 팝업창이 차단되었습니다. 주소창의 팝업 차단을 해제해 주세요.');
+        }
       }
     }
 
     isSigningIn = false;
-    throw new Error('Google 계정 인증에 실패했습니다. 브라우저 팝업 차단을 해제하시거나 [토큰 직접입력]을 이용해 주세요.');
+    throw new Error('Google 계정 인증에 실패했습니다. 구글 콘솔에 설정한 내용이 전파되는 데 약 2~5분 정도 소요될 수 있으니 잠시 후 다시 시도해 주세요.');
   }
 
   /**
@@ -207,9 +215,6 @@ export class GoogleSheetsService {
     }
   }
 
-  /**
-   * Extract distinct years from lectures list, sorted descending (e.g. 2026, 2025, 2024...)
-   */
   static getAvailableYears(lectures: LectureRequest[]): string[] {
     const yearsSet = new Set<string>();
     for (const l of lectures) {
@@ -223,9 +228,6 @@ export class GoogleSheetsService {
     return Array.from(yearsSet).sort().reverse();
   }
 
-  /**
-   * Calculate next month last day
-   */
   static getNextMonthLastDay(dateStr: string): string {
     if (!dateStr) return "-";
     try {
@@ -244,8 +246,38 @@ export class GoogleSheetsService {
   }
 
   /* =========================================================================
-     1. LECTURES & SETTLEMENT MASTER LEDGER FORMATTERS
+     Row & Header Formatters
      ========================================================================= */
+
+  static getLedgerHeaders(): string[] {
+    return [
+      '연번',
+      '출강일자',
+      '의뢰 기업명',
+      '지정 협력사',
+      '출강 교육 명칭',
+      '진행시간',
+      '교육장소',
+      '지원자격',
+      '배정 주강사',
+      '주강사 계좌번호',
+      '배정 보조강사',
+      '강의시간(시간)',
+      '예정인원(명)',
+      '주강사료(원)',
+      '보조강사료(원)',
+      '인당 재료비(원)',
+      '재료비 총액(원)',
+      '로열티 마일리지(M)',
+      '정산 총 예산(원)',
+      '만족도 평점',
+      '출강 현황',
+      '정산 상태',
+      '예정 정산일(익월 말일)',
+      '만족도 조사 링크',
+      '최종 동기화 일시'
+    ];
+  }
 
   static formatLectureRow(index: number, lecture: LectureRequest, users?: UserProfile[]): (string | number)[] {
     const mainHours = lecture.mainHours || 2;
@@ -304,36 +336,6 @@ export class GoogleSheetsService {
     ];
   }
 
-  static getLedgerHeaders(): string[] {
-    return [
-      '연번',
-      '출강일자',
-      '의뢰 기업명',
-      '지정 협력사',
-      '출강 교육 명칭',
-      '진행시간',
-      '교육장소',
-      '지원자격',
-      '배정 주강사',
-      '주강사 계좌번호',
-      '배정 보조강사',
-      '강의시간(시간)',
-      '예정인원(명)',
-      '주강사료(원)',
-      '보조강사료(원)',
-      '인당 재료비(원)',
-      '재료비 총액(원)',
-      '로열티 마일리지(M)',
-      '정산 총 예산(원)',
-      '만족도 평점',
-      '출강 현황',
-      '정산 상태',
-      '예정 정산일(익월 말일)',
-      '만족도 조사 링크',
-      '최종 동기화 일시'
-    ];
-  }
-
   static formatSummaryRow(lectures: LectureRequest[], label: string = '합계 및 평균'): (string | number)[] {
     const totHours = lectures.reduce((sum, l) => sum + (l.mainHours || 2), 0);
     const totAttendees = lectures.reduce((sum, l) => sum + (l.attendees || 20), 0);
@@ -377,10 +379,6 @@ export class GoogleSheetsService {
     ];
   }
 
-  /* =========================================================================
-     2. INSTRUCTORS (소속 강사단 관리) FORMATTERS
-     ========================================================================= */
-
   static getInstructorsHeaders(): string[] {
     return [
       '연번',
@@ -401,124 +399,64 @@ export class GoogleSheetsService {
     ];
   }
 
-  static formatInstructorRow(index: number, u: UserProfile): (string | number)[] {
-    const specialties = (u.profileCard?.specialties || []).join(', ') || '미지정';
-    const ratingStr = u.averageRating ? `⭐ ${Number(u.averageRating).toFixed(1)}` : '평가대기';
-    const approvedStr = u.isApproved ? '공식 승인 완료' : '승인 대기';
-    const adminStr = u.isAdmin ? '마스터 총괄 관리자' : '일반 소속 강사';
-    const bankAccount = u.profileCard?.bankAccount || '미등록';
-    const phone = u.profileCard?.contactPhone || '미등록';
-    const region = u.profileCard?.region || '전국/온라인';
+  static formatInstructorRow(index: number, user: UserProfile): (string | number)[] {
+    const specialties = user.profileCard?.specialties ? user.profileCard.specialties.join(', ') : '-';
+    const totalLectures = user.lectureCount || 0;
+    const avgRating = user.averageRating ? `${user.averageRating.toFixed(1)} / 5.0` : '-';
+    const approvedStr = user.isApproved ? '✓ 승인 완료' : '⌛ 승인 대기';
+    const adminStr = user.isAdmin ? '👑 관리자' : '일반 회원';
 
     return [
       index,
-      u.name,
-      u.email,
-      u.tier,
-      u.mileage || 0,
-      bankAccount,
-      phone,
-      region,
+      user.name || '미등록',
+      user.loginId || user.email || '-',
+      user.tier,
+      user.mileage || 0,
+      user.profileCard?.bankAccount || '미등록',
+      user.profileCard?.contactPhone || '-',
+      user.profileCard?.region || '전국',
       specialties,
-      u.lectureCount || 0,
-      ratingStr,
+      totalLectures,
+      avgRating,
       approvedStr,
       adminStr,
-      u.createdAt || '-',
+      user.createdAt || '-',
       new Date().toLocaleString('ko-KR')
     ];
   }
-
-  static formatInstructorsSummaryRow(users: UserProfile[]): (string | number)[] {
-    const totMileage = users.reduce((sum, u) => sum + (u.mileage || 0), 0);
-    const totLectures = users.reduce((sum, u) => sum + (u.lectureCount || 0), 0);
-    const rated = users.filter(u => u.averageRating);
-    const avgRating = rated.length > 0 
-      ? (rated.reduce((sum, u) => sum + Number(u.averageRating), 0) / rated.length).toFixed(2)
-      : '5.00';
-    const approvedCount = users.filter(u => u.isApproved).length;
-    const adminCount = users.filter(u => u.isAdmin).length;
-
-    return [
-      '∑',
-      `소속 강사단 총 ${users.length}명`,
-      '-',
-      '-',
-      totMileage,
-      '-',
-      '-',
-      '-',
-      '-',
-      totLectures,
-      `⭐ ${avgRating}`,
-      `승인 ${approvedCount}명 / 대기 ${users.length - approvedCount}명`,
-      `관리자 ${adminCount}명`,
-      '-',
-      new Date().toLocaleString('ko-KR')
-    ];
-  }
-
-  /* =========================================================================
-     3. PARTNERSHIP PROPOSALS (외부 제휴 의뢰 수신함) FORMATTERS
-     ========================================================================= */
 
   static getProposalsHeaders(): string[] {
     return [
       '연번',
-      '접수 일시',
+      '접수일시',
       '의뢰 기업/기관명',
-      '신청자/담당자',
-      '담당자 이메일',
+      '담당자 성명',
       '연락처',
-      '제휴/출강 의뢰 제목',
-      '상세 의뢰 내용',
-      '진행 처리 상태',
+      '담당자 이메일',
+      '의뢰 분야 및 내용 요약',
+      '처리 상태',
       '최종 동기화 일시'
     ];
   }
 
   static formatProposalRow(index: number, p: PartnershipProposal): (string | number)[] {
     const statusKorean = 
-      p.status === 'accepted' ? '✓ 제휴 수락 및 승인' :
-      p.status === 'reviewed' ? '🔍 검토 완료' :
-      p.status === 'declined' ? '✕ 반려 처리' : '⌛ 신규 접수 대기';
+      p.status === 'accepted' ? '✓ 제휴 수락' :
+      p.status === 'reviewed' ? '검토 완료' :
+      p.status === 'declined' ? '거절됨' : '신규 접수';
 
     return [
       index,
       p.createdAt || '-',
       p.companyName || '미지정',
-      p.proposerName || '미지정',
-      p.email || '-',
+      p.proposerName || '-',
       p.phone || '-',
-      p.title || '-',
-      p.content || '-',
+      p.email || '-',
+      p.title || p.content || '-',
       statusKorean,
       new Date().toLocaleString('ko-KR')
     ];
   }
-
-  static formatProposalsSummaryRow(proposals: PartnershipProposal[]): (string | number)[] {
-    const pending = proposals.filter(p => p.status === 'pending').length;
-    const accepted = proposals.filter(p => p.status === 'accepted').length;
-    const reviewed = proposals.filter(p => p.status === 'reviewed').length;
-
-    return [
-      '∑',
-      `총 ${proposals.length}건 의뢰`,
-      '-',
-      '-',
-      '-',
-      '-',
-      '-',
-      `신규 대기: ${pending}건 / 승인: ${accepted}건 / 검토: ${reviewed}건`,
-      '-',
-      new Date().toLocaleString('ko-KR')
-    ];
-  }
-
-  /* =========================================================================
-     4. EDUCATIONAL PROGRAMS (명품 교육과정 승인대기) FORMATTERS
-     ========================================================================= */
 
   static getProgramsHeaders(): string[] {
     return [
@@ -555,46 +493,22 @@ export class GoogleSheetsService {
     ];
   }
 
-  static formatProgramsSummaryRow(programs: EducationalProgram[]): (string | number)[] {
-    const approved = programs.filter(p => p.isApproved).length;
-    const pending = programs.length - approved;
-    const avgRoyalty = programs.length > 0
-      ? (programs.reduce((s, p) => s + (p.royaltyRate || 5), 0) / programs.length).toFixed(1)
-      : '5.0';
-
-    return [
-      '∑',
-      `총 ${programs.length}개 과정`,
-      '-',
-      '-',
-      `승인 ${approved}개 / 대기 ${pending}개`,
-      '-',
-      '-',
-      `평균 로열티: ${avgRoyalty} M`,
-      '-',
-      '-',
-      new Date().toLocaleString('ko-KR')
-    ];
-  }
-
   /* =========================================================================
-     5. SHEET FORMATTING & TAB MANAGEMENT
+     Google Sheets API v4 Integration Methods
      ========================================================================= */
 
   /**
-   * Apply styling to Google Sheet tab: Color-coded header, summary row, frozen top row, auto-resize
+   * Format Google Sheet styling: frozen header, bold text, auto resize
    */
   static async formatSheet(
     spreadsheetId: string,
     accessToken: string,
     totalRows: number,
     sheetId: number = 0,
-    columnCount: number = 25,
-    headerColor: { red: number; green: number; blue: number } = { red: 0.12, green: 0.45, blue: 0.27 }
+    columnCount: number = 25
   ): Promise<void> {
     try {
-      const requests: any[] = [
-        // 1. Format Header Row (row 0)
+      const requests = [
         {
           repeatCell: {
             range: {
@@ -606,7 +520,7 @@ export class GoogleSheetsService {
             },
             cell: {
               userEnteredFormat: {
-                backgroundColor: headerColor,
+                backgroundColor: { red: 0.12, green: 0.45, blue: 0.27 },
                 horizontalAlignment: 'CENTER',
                 verticalAlignment: 'MIDDLE',
                 textFormat: {
@@ -619,31 +533,6 @@ export class GoogleSheetsService {
             fields: 'userEnteredFormat(backgroundColor,horizontalAlignment,verticalAlignment,textFormat)'
           }
         },
-        // 2. Format Summary Row (last row)
-        {
-          repeatCell: {
-            range: {
-              sheetId,
-              startRowIndex: totalRows - 1,
-              endRowIndex: totalRows,
-              startColumnIndex: 0,
-              endColumnIndex: columnCount
-            },
-            cell: {
-              userEnteredFormat: {
-                backgroundColor: { red: 0.94, green: 0.96, blue: 0.95 },
-                horizontalAlignment: 'CENTER',
-                verticalAlignment: 'MIDDLE',
-                textFormat: {
-                  fontSize: 10,
-                  bold: true
-                }
-              }
-            },
-            fields: 'userEnteredFormat(backgroundColor,horizontalAlignment,verticalAlignment,textFormat)'
-          }
-        },
-        // 3. Freeze Header Row
         {
           updateSheetProperties: {
             properties: {
@@ -653,17 +542,6 @@ export class GoogleSheetsService {
               }
             },
             fields: 'gridProperties.frozenRowCount'
-          }
-        },
-        // 4. Auto-resize all columns
-        {
-          autoResizeDimensions: {
-            dimensions: {
-              sheetId,
-              dimension: 'COLUMNS',
-              startIndex: 0,
-              endIndex: columnCount
-            }
           }
         }
       ];
@@ -677,7 +555,7 @@ export class GoogleSheetsService {
         body: JSON.stringify({ requests })
       });
     } catch (e) {
-      console.warn("Could not apply Google Sheet styling batch update:", e);
+      console.warn("Could not apply Google Sheet styling:", e);
     }
   }
 
@@ -695,9 +573,7 @@ export class GoogleSheetsService {
         'Content-Type': 'application/json'
       },
       body: JSON.stringify({
-        properties: {
-          title
-        },
+        properties: { title },
         sheets: [
           {
             properties: {
@@ -727,8 +603,31 @@ export class GoogleSheetsService {
   }
 
   /**
-   * Ensure a sheet tab with tabTitle exists in the spreadsheet.
-   * If not, creates it and returns its numeric sheetId.
+   * Get or create spreadsheet
+   */
+  static async getOrCreateSpreadsheet(accessToken: string): Promise<{ id: string; url: string }> {
+    const existingId = this.getStoredSpreadsheetId();
+    if (existingId) {
+      try {
+        const check = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${existingId}?fields=spreadsheetId,spreadsheetUrl`, {
+          headers: { Authorization: `Bearer ${accessToken}` }
+        });
+        if (check.ok) {
+          const data = await check.json();
+          return {
+            id: existingId,
+            url: data.spreadsheetUrl || `https://docs.google.com/spreadsheets/d/${existingId}/edit`
+          };
+        }
+      } catch {
+        // Fall back to creating new
+      }
+    }
+    return this.createMasterSpreadsheet(accessToken);
+  }
+
+  /**
+   * Ensure a sheet tab with tabTitle exists in the spreadsheet
    */
   static async ensureTabExists(
     spreadsheetId: string,
@@ -737,19 +636,15 @@ export class GoogleSheetsService {
   ): Promise<number> {
     const metaRes = await fetch(
       `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}?fields=sheets.properties`,
-      {
-        headers: { Authorization: `Bearer ${accessToken}` }
-      }
+      { headers: { Authorization: `Bearer ${accessToken}` } }
     );
 
-    if (!metaRes.ok) {
-      throw new Error(`시트 메타데이터 조회 실패 (HTTP ${metaRes.status})`);
-    }
-
-    const meta = await metaRes.json();
-    const existing = meta.sheets?.find((s: any) => s.properties?.title === tabTitle);
-    if (existing) {
-      return existing.properties.sheetId;
+    if (metaRes.ok) {
+      const meta = await metaRes.json();
+      const existing = meta.sheets?.find((s: any) => s.properties?.title === tabTitle);
+      if (existing) {
+        return existing.properties.sheetId;
+      }
     }
 
     // Add new tab via batchUpdate
@@ -782,14 +677,8 @@ export class GoogleSheetsService {
 
     if (!addRes.ok) {
       const err = await addRes.json().catch(() => ({}));
-      // If error was that sheet already exists due to race condition, re-fetch
       if (err.error?.message?.includes('already exists')) {
-        const reMeta = await fetch(
-          `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}?fields=sheets.properties`,
-          { headers: { Authorization: `Bearer ${accessToken}` } }
-        ).then(r => r.json());
-        const match = reMeta.sheets?.find((s: any) => s.properties?.title === tabTitle);
-        if (match) return match.properties.sheetId;
+        return 0;
       }
       throw new Error(err.error?.message || `시트 탭 '${tabTitle}' 생성 실패`);
     }
@@ -799,53 +688,17 @@ export class GoogleSheetsService {
   }
 
   /**
-   * Helper to ensure master spreadsheet exists or create it
+   * Write data to a specific tab in the Google Spreadsheet
    */
-  static async getOrCreateSpreadsheet(accessToken: string): Promise<{ id: string; url: string }> {
-    let sheetId = this.getStoredSpreadsheetId();
-    let sheetUrl = sheetId ? `https://docs.google.com/spreadsheets/d/${sheetId}/edit` : '';
-
-    if (!sheetId) {
-      const created = await this.createMasterSpreadsheet(accessToken);
-      return created;
-    }
-
-    const testRes = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${sheetId}?fields=properties.title`, {
-      headers: { Authorization: `Bearer ${accessToken}` }
-    });
-
-    if (!testRes.ok) {
-      const created = await this.createMasterSpreadsheet(accessToken);
-      return created;
-    }
-
-    return { id: sheetId, url: sheetUrl };
-  }
-
-  /* =========================================================================
-     6. MODULE SYNC METHODS
-     ========================================================================= */
-
-  /**
-   * Sync lectures tab
-   */
-  static async syncTab(
+  static async writeTabValues(
     spreadsheetId: string,
     accessToken: string,
     tabTitle: string,
-    tabLectures: LectureRequest[],
-    users?: UserProfile[],
-    summaryLabel?: string
+    values: (string | number)[][]
   ): Promise<void> {
-    const numericSheetId = await this.ensureTabExists(spreadsheetId, accessToken, tabTitle);
-
-    const headers = this.getLedgerHeaders();
-    const rows = tabLectures.map((l, i) => this.formatLectureRow(i + 1, l, users));
-    const summaryRow = this.formatSummaryRow(tabLectures, summaryLabel || `${tabTitle} 합계/평균`);
-    const allValues = [headers, ...rows, summaryRow];
-
+    // 1. Clear existing contents in tab
     await fetch(
-      `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${encodeURIComponent(`'${tabTitle}'!A1:Z500`)}:clear`,
+      `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${encodeURIComponent(tabTitle)}:clear`,
       {
         method: 'POST',
         headers: {
@@ -853,369 +706,315 @@ export class GoogleSheetsService {
           'Content-Type': 'application/json'
         }
       }
-    ).catch(() => {});
+    );
 
-    const range = `'${tabTitle}'!A1`;
-    const writeRes = await fetch(
-      `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${encodeURIComponent(range)}?valueInputOption=USER_ENTERED`,
+    // 2. Write new values
+    const range = `${encodeURIComponent(tabTitle)}!A1`;
+    const res = await fetch(
+      `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${range}?valueInputOption=USER_ENTERED`,
       {
         method: 'PUT',
         headers: {
           Authorization: `Bearer ${accessToken}`,
           'Content-Type': 'application/json'
         },
-        body: JSON.stringify({ values: allValues })
+        body: JSON.stringify({
+          range: `${tabTitle}!A1`,
+          majorDimension: 'ROWS',
+          values
+        })
       }
     );
 
-    if (!writeRes.ok) {
-      const err = await writeRes.json().catch(() => ({}));
-      throw new Error(err.error?.message || `'${tabTitle}' 시트 작성 실패 (HTTP ${writeRes.status})`);
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.error?.message || `'${tabTitle}' 데이터 저장 실패 (HTTP ${res.status})`);
     }
-
-    await this.formatSheet(
-      spreadsheetId, 
-      accessToken, 
-      allValues.length, 
-      numericSheetId, 
-      headers.length, 
-      { red: 0.12, green: 0.45, blue: 0.27 } // Dark Forest Green
-    );
   }
 
   /**
-   * Sync Instructors (소속 강사단 관리) to Sheet tab '소속강사단_관리'
-   */
-  static async syncInstructorsToSheet(
-    users: UserProfile[],
-    accessToken: string
-  ): Promise<GoogleSheetsSyncResult> {
-    const { id: sheetId, url: sheetUrl } = await this.getOrCreateSpreadsheet(accessToken);
-    const tabTitle = '소속강사단_관리';
-    const numericSheetId = await this.ensureTabExists(sheetId, accessToken, tabTitle);
-
-    const headers = this.getInstructorsHeaders();
-    const rows = users.map((u, i) => this.formatInstructorRow(i + 1, u));
-    const summaryRow = this.formatInstructorsSummaryRow(users);
-    const allValues = [headers, ...rows, summaryRow];
-
-    await fetch(
-      `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${encodeURIComponent(`'${tabTitle}'!A1:Z500`)}:clear`,
-      {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${accessToken}`,
-          'Content-Type': 'application/json'
-        }
-      }
-    ).catch(() => {});
-
-    const range = `'${tabTitle}'!A1`;
-    const writeRes = await fetch(
-      `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${encodeURIComponent(range)}?valueInputOption=USER_ENTERED`,
-      {
-        method: 'PUT',
-        headers: {
-          Authorization: `Bearer ${accessToken}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({ values: allValues })
-      }
-    );
-
-    if (!writeRes.ok) {
-      const err = await writeRes.json().catch(() => ({}));
-      throw new Error(err.error?.message || `'${tabTitle}' 작성 실패 (HTTP ${writeRes.status})`);
-    }
-
-    await this.formatSheet(
-      sheetId, 
-      accessToken, 
-      allValues.length, 
-      numericSheetId, 
-      headers.length,
-      { red: 0.12, green: 0.25, blue: 0.45 } // Navy Blue
-    );
-
-    return {
-      spreadsheetId: sheetId,
-      spreadsheetUrl: sheetUrl,
-      totalSynced: users.length,
-      syncedTabs: [tabTitle]
-    };
-  }
-
-  /**
-   * Sync External Partnership Proposals (외부 제휴 의뢰 수신함) to Sheet tab '외부제휴의뢰_수신함'
-   */
-  static async syncProposalsToSheet(
-    proposals: PartnershipProposal[],
-    accessToken: string
-  ): Promise<GoogleSheetsSyncResult> {
-    const { id: sheetId, url: sheetUrl } = await this.getOrCreateSpreadsheet(accessToken);
-    const tabTitle = '외부제휴의뢰_수신함';
-    const numericSheetId = await this.ensureTabExists(sheetId, accessToken, tabTitle);
-
-    const headers = this.getProposalsHeaders();
-    const rows = proposals.map((p, i) => this.formatProposalRow(i + 1, p));
-    const summaryRow = this.formatProposalsSummaryRow(proposals);
-    const allValues = [headers, ...rows, summaryRow];
-
-    await fetch(
-      `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${encodeURIComponent(`'${tabTitle}'!A1:Z500`)}:clear`,
-      {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${accessToken}`,
-          'Content-Type': 'application/json'
-        }
-      }
-    ).catch(() => {});
-
-    const range = `'${tabTitle}'!A1`;
-    const writeRes = await fetch(
-      `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${encodeURIComponent(range)}?valueInputOption=USER_ENTERED`,
-      {
-        method: 'PUT',
-        headers: {
-          Authorization: `Bearer ${accessToken}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({ values: allValues })
-      }
-    );
-
-    if (!writeRes.ok) {
-      const err = await writeRes.json().catch(() => ({}));
-      throw new Error(err.error?.message || `'${tabTitle}' 작성 실패 (HTTP ${writeRes.status})`);
-    }
-
-    await this.formatSheet(
-      sheetId, 
-      accessToken, 
-      allValues.length, 
-      numericSheetId, 
-      headers.length,
-      { red: 0.55, green: 0.35, blue: 0.12 } // Amber / Gold
-    );
-
-    return {
-      spreadsheetId: sheetId,
-      spreadsheetUrl: sheetUrl,
-      totalSynced: proposals.length,
-      syncedTabs: [tabTitle]
-    };
-  }
-
-  /**
-   * Sync Educational Programs (명품 교육과정 승인대기) to Sheet tab '명품교육과정_승인대장'
-   */
-  static async syncProgramsToSheet(
-    programs: EducationalProgram[],
-    accessToken: string
-  ): Promise<GoogleSheetsSyncResult> {
-    const { id: sheetId, url: sheetUrl } = await this.getOrCreateSpreadsheet(accessToken);
-    const tabTitle = '명품교육과정_승인대장';
-    const numericSheetId = await this.ensureTabExists(sheetId, accessToken, tabTitle);
-
-    const headers = this.getProgramsHeaders();
-    const rows = programs.map((prog, i) => this.formatProgramRow(i + 1, prog));
-    const summaryRow = this.formatProgramsSummaryRow(programs);
-    const allValues = [headers, ...rows, summaryRow];
-
-    await fetch(
-      `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${encodeURIComponent(`'${tabTitle}'!A1:Z500`)}:clear`,
-      {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${accessToken}`,
-          'Content-Type': 'application/json'
-        }
-      }
-    ).catch(() => {});
-
-    const range = `'${tabTitle}'!A1`;
-    const writeRes = await fetch(
-      `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${encodeURIComponent(range)}?valueInputOption=USER_ENTERED`,
-      {
-        method: 'PUT',
-        headers: {
-          Authorization: `Bearer ${accessToken}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({ values: allValues })
-      }
-    );
-
-    if (!writeRes.ok) {
-      const err = await writeRes.json().catch(() => ({}));
-      throw new Error(err.error?.message || `'${tabTitle}' 작성 실패 (HTTP ${writeRes.status})`);
-    }
-
-    await this.formatSheet(
-      sheetId, 
-      accessToken, 
-      allValues.length, 
-      numericSheetId, 
-      headers.length,
-      { red: 0.38, green: 0.18, blue: 0.50 } // Royal Purple
-    );
-
-    return {
-      spreadsheetId: sheetId,
-      spreadsheetUrl: sheetUrl,
-      totalSynced: programs.length,
-      syncedTabs: [tabTitle]
-    };
-  }
-
-  /**
-   * Unified Executive Master Sync:
-   * Synchronizes settlement master ledger (by year or all), instructors, proposals, and programs all together
+   * Sync all selected executive modules directly to Google Sheets
    */
   static async syncAllExecutiveModulesToSheet(
     params: ExecutiveSyncParams,
-    accessToken: string
+    providedToken?: string
   ): Promise<GoogleSheetsSyncResult> {
-    const { id: sheetId, url: sheetUrl } = await this.getOrCreateSpreadsheet(accessToken);
-    const syncedTabs: string[] = [];
-    let totalItems = 0;
-
-    // 1. Sync Settlement Master Ledger
-    if (params.syncLectures !== false && params.lectures.length > 0) {
-      const mode = params.lectureSyncMode || 'all_by_year';
-      const year = params.lectureSyncSelectedYear || '2026';
-      const res = await this.syncLecturesWithMode(
-        params.lectures,
-        accessToken,
-        { mode, selectedYear: year },
-        params.users
-      );
-      if (res.syncedTabs) syncedTabs.push(...res.syncedTabs);
-      totalItems += res.totalSynced;
-      await delay(250);
+    const token = providedToken || cachedAccessToken;
+    
+    // If no Google token is available, gracefully download multi-tab Excel
+    if (!token) {
+      return this.exportMultiTabExcel(params);
     }
 
-    // 2. Sync Instructors
-    if (params.syncInstructors !== false && params.users && params.users.length > 0) {
-      const res = await this.syncInstructorsToSheet(params.users, accessToken);
-      if (res.syncedTabs) syncedTabs.push(...res.syncedTabs);
-      totalItems += res.totalSynced;
-      await delay(250);
-    }
-
-    // 3. Sync Proposals
-    if (params.syncProposals !== false && params.proposals && params.proposals.length > 0) {
-      const res = await this.syncProposalsToSheet(params.proposals, accessToken);
-      if (res.syncedTabs) syncedTabs.push(...res.syncedTabs);
-      totalItems += res.totalSynced;
-      await delay(250);
-    }
-
-    // 4. Sync Programs
-    if (params.syncPrograms !== false && params.programs && params.programs.length > 0) {
-      const res = await this.syncProgramsToSheet(params.programs, accessToken);
-      if (res.syncedTabs) syncedTabs.push(...res.syncedTabs);
-      totalItems += res.totalSynced;
-    }
-
-    return {
-      spreadsheetId: sheetId,
-      spreadsheetUrl: sheetUrl,
-      totalSynced: totalItems,
-      syncedTabs
-    };
-  }
-
-  /**
-   * Sync lectures with specified mode:
-   * - 'all_by_year': separates into individual tabs for each year ('2026년_정산대장', '2025년_정산대장'...) + '실시간_출강정산대장'
-   * - 'single_year': syncs only the selected year to '${year}년_정산대장'
-   * - 'single_sheet': syncs all to '실시간_출강정산대장'
-   */
-  static async syncLecturesWithMode(
-    lectures: LectureRequest[],
-    accessToken: string,
-    options: GoogleSyncOptions,
-    users?: UserProfile[]
-  ): Promise<GoogleSheetsSyncResult> {
-    const { id: sheetId, url: sheetUrl } = await this.getOrCreateSpreadsheet(accessToken);
+    const { url: spreadsheetUrl, id: spreadsheetId } = await this.getOrCreateSpreadsheet(token);
     const syncedTabs: string[] = [];
     let totalSynced = 0;
 
-    if (options.mode === 'all_by_year') {
-      const years = this.getAvailableYears(lectures);
-      for (const y of years) {
-        const yearLectures = lectures.filter(l => l.date && l.date.startsWith(y));
-        const tabTitle = `${y}년_정산대장`;
-        await this.syncTab(sheetId, accessToken, tabTitle, yearLectures, users, `${y}년 합계 및 평균`);
+    const {
+      lectures,
+      users,
+      proposals,
+      programs,
+      syncLectures = true,
+      syncInstructors = true,
+      syncProposals = true,
+      syncPrograms = true,
+      lectureSyncMode = 'all_by_year',
+      lectureSyncSelectedYear
+    } = params;
+
+    // 1. Sync Lectures
+    if (syncLectures && lectures.length > 0) {
+      const headers = this.getLedgerHeaders();
+
+      if (lectureSyncMode === 'all_by_year') {
+        const years = this.getAvailableYears(lectures);
+        for (const year of years) {
+          const yearLectures = lectures.filter(l => l.date && l.date.startsWith(year));
+          if (yearLectures.length > 0) {
+            const tabTitle = `${year}년_정산대장`;
+            const sheetId = await this.ensureTabExists(spreadsheetId, token, tabTitle);
+            const rows = yearLectures.map((l, i) => this.formatLectureRow(i + 1, l, users));
+            const sumRow = this.formatSummaryRow(yearLectures, `${year}년 소계`);
+            await this.writeTabValues(spreadsheetId, token, tabTitle, [headers, ...rows, sumRow]);
+            await this.formatSheet(spreadsheetId, token, rows.length + 2, sheetId, headers.length);
+            syncedTabs.push(tabTitle);
+            await delay(200);
+          }
+        }
+
+        // Consolidated master tab
+        const tabTitle = '실시간_출강정산대장';
+        const sheetId = await this.ensureTabExists(spreadsheetId, token, tabTitle);
+        const rows = lectures.map((l, i) => this.formatLectureRow(i + 1, l, users));
+        const sumRow = this.formatSummaryRow(lectures, '전체 누적 합계');
+        await this.writeTabValues(spreadsheetId, token, tabTitle, [headers, ...rows, sumRow]);
+        await this.formatSheet(spreadsheetId, token, rows.length + 2, sheetId, headers.length);
         syncedTabs.push(tabTitle);
-        await delay(200);
+        totalSynced += lectures.length;
+      } else if (lectureSyncMode === 'single_year' && lectureSyncSelectedYear) {
+        const tabTitle = `${lectureSyncSelectedYear}년_정산대장`;
+        const sheetId = await this.ensureTabExists(spreadsheetId, token, tabTitle);
+        const yearLectures = lectures.filter(l => l.date && l.date.startsWith(lectureSyncSelectedYear));
+        const rows = yearLectures.map((l, i) => this.formatLectureRow(i + 1, l, users));
+        const sumRow = this.formatSummaryRow(yearLectures, `${lectureSyncSelectedYear}년 합계`);
+        await this.writeTabValues(spreadsheetId, token, tabTitle, [headers, ...rows, sumRow]);
+        await this.formatSheet(spreadsheetId, token, rows.length + 2, sheetId, headers.length);
+        syncedTabs.push(tabTitle);
+        totalSynced += yearLectures.length;
+      } else {
+        const tabTitle = '실시간_출강정산대장';
+        const sheetId = await this.ensureTabExists(spreadsheetId, token, tabTitle);
+        const rows = lectures.map((l, i) => this.formatLectureRow(i + 1, l, users));
+        const sumRow = this.formatSummaryRow(lectures, '전체 누적 합계');
+        await this.writeTabValues(spreadsheetId, token, tabTitle, [headers, ...rows, sumRow]);
+        await this.formatSheet(spreadsheetId, token, rows.length + 2, sheetId, headers.length);
+        syncedTabs.push(tabTitle);
+        totalSynced += lectures.length;
       }
+    }
 
-      // Also update master overall sheet '실시간_출강정산대장'
-      const masterTitle = '실시간_출강정산대장';
-      await this.syncTab(sheetId, accessToken, masterTitle, lectures, users, '전체 통합 합계 및 평균');
-      syncedTabs.push(masterTitle);
-      totalSynced = lectures.length;
-
-    } else if (options.mode === 'single_year' && options.selectedYear) {
-      const y = options.selectedYear;
-      const yearLectures = lectures.filter(l => l.date && l.date.startsWith(y));
-      const tabTitle = `${y}년_정산대장`;
-      await this.syncTab(sheetId, accessToken, tabTitle, yearLectures, users, `${y}년 합계 및 평균`);
+    // 2. Sync Instructors
+    if (syncInstructors && users.length > 0) {
+      await delay(200);
+      const tabTitle = '소속강사단_관리';
+      const sheetId = await this.ensureTabExists(spreadsheetId, token, tabTitle);
+      const headers = this.getInstructorsHeaders();
+      const rows = users.map((u, i) => this.formatInstructorRow(i + 1, u));
+      await this.writeTabValues(spreadsheetId, token, tabTitle, [headers, ...rows]);
+      await this.formatSheet(spreadsheetId, token, rows.length + 1, sheetId, headers.length);
       syncedTabs.push(tabTitle);
-      totalSynced = yearLectures.length;
+      totalSynced += users.length;
+    }
 
-    } else {
-      // Single sheet mode
-      const tabTitle = '실시간_출강정산대장';
-      await this.syncTab(sheetId, accessToken, tabTitle, lectures, users, '전체 합계 및 평균');
+    // 3. Sync Proposals
+    if (syncProposals && proposals.length > 0) {
+      await delay(200);
+      const tabTitle = '외부제휴의뢰_수신함';
+      const sheetId = await this.ensureTabExists(spreadsheetId, token, tabTitle);
+      const headers = this.getProposalsHeaders();
+      const rows = proposals.map((p, i) => this.formatProposalRow(i + 1, p));
+      await this.writeTabValues(spreadsheetId, token, tabTitle, [headers, ...rows]);
+      await this.formatSheet(spreadsheetId, token, rows.length + 1, sheetId, headers.length);
       syncedTabs.push(tabTitle);
-      totalSynced = lectures.length;
+      totalSynced += proposals.length;
+    }
+
+    // 4. Sync Programs
+    if (syncPrograms && programs.length > 0) {
+      await delay(200);
+      const tabTitle = '명품교육과정_승인대장';
+      const sheetId = await this.ensureTabExists(spreadsheetId, token, tabTitle);
+      const headers = this.getProgramsHeaders();
+      const rows = programs.map((p, i) => this.formatProgramRow(i + 1, p));
+      await this.writeTabValues(spreadsheetId, token, tabTitle, [headers, ...rows]);
+      await this.formatSheet(spreadsheetId, token, rows.length + 1, sheetId, headers.length);
+      syncedTabs.push(tabTitle);
+      totalSynced += programs.length;
     }
 
     return {
-      spreadsheetId: sheetId,
-      spreadsheetUrl: sheetUrl,
+      spreadsheetId,
+      spreadsheetUrl,
       totalSynced,
       syncedTabs
     };
   }
 
-  /**
-   * Sync all lectures to Google Sheet (Defaulting to year-split tabs or single sheet)
-   */
-  static async syncAllLecturesToSheet(
+  static async syncInstructorsToSheet(users: UserProfile[], token?: string): Promise<GoogleSheetsSyncResult> {
+    const activeToken = token || cachedAccessToken;
+    if (!activeToken) {
+      const wb = XLSX.utils.book_new();
+      const headers = this.getInstructorsHeaders();
+      const rows = users.map((u, i) => this.formatInstructorRow(i + 1, u));
+      const ws = XLSX.utils.aoa_to_sheet([headers, ...rows]);
+      XLSX.utils.book_append_sheet(wb, ws, '소속강사단_관리');
+      const today = new Date().toISOString().substring(0, 10);
+      XLSX.writeFile(wb, `KPCIA_소속강사단명부_${today}.xlsx`);
+      return { spreadsheetId: '', spreadsheetUrl: '', totalSynced: users.length, syncedTabs: ['소속강사단_관리'] };
+    }
+
+    const { url: spreadsheetUrl, id: spreadsheetId } = await this.getOrCreateSpreadsheet(activeToken);
+    const tabTitle = '소속강사단_관리';
+    const sheetId = await this.ensureTabExists(spreadsheetId, activeToken, tabTitle);
+    const headers = this.getInstructorsHeaders();
+    const rows = users.map((u, i) => this.formatInstructorRow(i + 1, u));
+    await this.writeTabValues(spreadsheetId, activeToken, tabTitle, [headers, ...rows]);
+    await this.formatSheet(spreadsheetId, activeToken, rows.length + 1, sheetId, headers.length);
+    return { spreadsheetId, spreadsheetUrl, totalSynced: users.length, syncedTabs: [tabTitle] };
+  }
+
+  static async syncProposalsToSheet(proposals: PartnershipProposal[], token?: string): Promise<GoogleSheetsSyncResult> {
+    const activeToken = token || cachedAccessToken;
+    if (!activeToken) {
+      const wb = XLSX.utils.book_new();
+      const headers = this.getProposalsHeaders();
+      const rows = proposals.map((p, i) => this.formatProposalRow(i + 1, p));
+      const ws = XLSX.utils.aoa_to_sheet([headers, ...rows]);
+      XLSX.utils.book_append_sheet(wb, ws, '외부제휴의뢰_수신함');
+      const today = new Date().toISOString().substring(0, 10);
+      XLSX.writeFile(wb, `KPCIA_외부제휴의뢰_${today}.xlsx`);
+      return { spreadsheetId: '', spreadsheetUrl: '', totalSynced: proposals.length, syncedTabs: ['외부제휴의뢰_수신함'] };
+    }
+
+    const { url: spreadsheetUrl, id: spreadsheetId } = await this.getOrCreateSpreadsheet(activeToken);
+    const tabTitle = '외부제휴의뢰_수신함';
+    const sheetId = await this.ensureTabExists(spreadsheetId, activeToken, tabTitle);
+    const headers = this.getProposalsHeaders();
+    const rows = proposals.map((p, i) => this.formatProposalRow(i + 1, p));
+    await this.writeTabValues(spreadsheetId, activeToken, tabTitle, [headers, ...rows]);
+    await this.formatSheet(spreadsheetId, activeToken, rows.length + 1, sheetId, headers.length);
+    return { spreadsheetId, spreadsheetUrl, totalSynced: proposals.length, syncedTabs: [tabTitle] };
+  }
+
+  static async syncProgramsToSheet(programs: EducationalProgram[], token?: string): Promise<GoogleSheetsSyncResult> {
+    const activeToken = token || cachedAccessToken;
+    if (!activeToken) {
+      const wb = XLSX.utils.book_new();
+      const headers = this.getProgramsHeaders();
+      const rows = programs.map((p, i) => this.formatProgramRow(i + 1, p));
+      const ws = XLSX.utils.aoa_to_sheet([headers, ...rows]);
+      XLSX.utils.book_append_sheet(wb, ws, '명품교육과정_승인대장');
+      const today = new Date().toISOString().substring(0, 10);
+      XLSX.writeFile(wb, `KPCIA_명품교육과정대장_${today}.xlsx`);
+      return { spreadsheetId: '', spreadsheetUrl: '', totalSynced: programs.length, syncedTabs: ['명품교육과정_승인대장'] };
+    }
+
+    const { url: spreadsheetUrl, id: spreadsheetId } = await this.getOrCreateSpreadsheet(activeToken);
+    const tabTitle = '명품교육과정_승인대장';
+    const sheetId = await this.ensureTabExists(spreadsheetId, activeToken, tabTitle);
+    const headers = this.getProgramsHeaders();
+    const rows = programs.map((p, i) => this.formatProgramRow(i + 1, p));
+    await this.writeTabValues(spreadsheetId, activeToken, tabTitle, [headers, ...rows]);
+    await this.formatSheet(spreadsheetId, activeToken, rows.length + 1, sheetId, headers.length);
+    return { spreadsheetId, spreadsheetUrl, totalSynced: programs.length, syncedTabs: [tabTitle] };
+  }
+
+  static async appendLectureSettlement(
     lectures: LectureRequest[],
-    accessToken: string,
-    users?: UserProfile[],
-    mode: GoogleSyncMode = 'all_by_year',
-    selectedYear?: string
-  ): Promise<GoogleSheetsSyncResult> {
-    return this.syncLecturesWithMode(
-      lectures,
-      accessToken,
-      { mode, selectedYear },
-      users
-    );
+    token: string,
+    users?: UserProfile[]
+  ): Promise<{ spreadsheetUrl: string }> {
+    try {
+      const { id: spreadsheetId, url: spreadsheetUrl } = await this.getOrCreateSpreadsheet(token);
+      const tabTitle = '실시간_출강정산대장';
+      const sheetId = await this.ensureTabExists(spreadsheetId, token, tabTitle);
+      const headers = this.getLedgerHeaders();
+      const rows = lectures.map((l, i) => this.formatLectureRow(i + 1, l, users));
+      const sumRow = this.formatSummaryRow(lectures, '전체 누적 합계');
+      await this.writeTabValues(spreadsheetId, token, tabTitle, [headers, ...rows, sumRow]);
+      await this.formatSheet(spreadsheetId, token, rows.length + 2, sheetId, headers.length);
+      return { spreadsheetUrl };
+    } catch (e) {
+      console.warn("Auto append settlement error:", e);
+      return { spreadsheetUrl: '' };
+    }
   }
 
   /**
-   * Append / Update lecture settlement to Google Sheet
-   * Automatically updates year tab and master overview sheet
+   * Fallback multi-tab Excel export
    */
-  static async appendLectureSettlement(
-    allLectures: LectureRequest[],
-    accessToken: string,
-    users?: UserProfile[]
-  ): Promise<{ spreadsheetUrl: string }> {
-    const res = await this.syncLecturesWithMode(
-      allLectures,
-      accessToken,
-      { mode: 'all_by_year' },
-      users
-    );
-    return { spreadsheetUrl: res.spreadsheetUrl };
+  static exportMultiTabExcel(params: ExecutiveSyncParams): GoogleSheetsSyncResult {
+    const wb = XLSX.utils.book_new();
+    const syncedTabs: string[] = [];
+    let totalSynced = 0;
+
+    const {
+      lectures,
+      users,
+      proposals,
+      programs,
+      syncLectures = true,
+      syncInstructors = true,
+      syncProposals = true,
+      syncPrograms = true
+    } = params;
+
+    if (syncLectures && lectures.length > 0) {
+      const headers = this.getLedgerHeaders();
+      const rows = lectures.map((l, i) => this.formatLectureRow(i + 1, l, users));
+      const sumRow = this.formatSummaryRow(lectures, '전체 누적 합계');
+      const ws = XLSX.utils.aoa_to_sheet([headers, ...rows, sumRow]);
+      XLSX.utils.book_append_sheet(wb, ws, '실시간_출강정산대장');
+      syncedTabs.push('실시간_출강정산대장');
+      totalSynced += lectures.length;
+    }
+
+    if (syncInstructors && users.length > 0) {
+      const headers = this.getInstructorsHeaders();
+      const rows = users.map((u, i) => this.formatInstructorRow(i + 1, u));
+      const ws = XLSX.utils.aoa_to_sheet([headers, ...rows]);
+      XLSX.utils.book_append_sheet(wb, ws, '소속강사단_관리');
+      syncedTabs.push('소속강사단_관리');
+      totalSynced += users.length;
+    }
+
+    if (syncProposals && proposals.length > 0) {
+      const headers = this.getProposalsHeaders();
+      const rows = proposals.map((p, i) => this.formatProposalRow(i + 1, p));
+      const ws = XLSX.utils.aoa_to_sheet([headers, ...rows]);
+      XLSX.utils.book_append_sheet(wb, ws, '외부제휴의뢰_수신함');
+      syncedTabs.push('외부제휴의뢰_수신함');
+      totalSynced += proposals.length;
+    }
+
+    if (syncPrograms && programs.length > 0) {
+      const headers = this.getProgramsHeaders();
+      const rows = programs.map((p, i) => this.formatProgramRow(i + 1, p));
+      const ws = XLSX.utils.aoa_to_sheet([headers, ...rows]);
+      XLSX.utils.book_append_sheet(wb, ws, '명품교육과정_승인대장');
+      syncedTabs.push('명품교육과정_승인대장');
+      totalSynced += programs.length;
+    }
+
+    const today = new Date().toISOString().substring(0, 10);
+    XLSX.writeFile(wb, `KPCIA_4대마스터대장_통합_${today}.xlsx`);
+
+    return {
+      spreadsheetId: 'local_excel_download',
+      spreadsheetUrl: '',
+      totalSynced,
+      syncedTabs
+    };
   }
 }
