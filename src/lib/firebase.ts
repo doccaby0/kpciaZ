@@ -53,6 +53,9 @@ export const INITIAL_USERS: UserProfile[] = [
     password: "400828",
     isApproved: true,
     emailVerified: true,
+    lectureCount: 152,
+    averageRating: 4.95,
+    lectureRatings: [5.0, 4.9, 5.0, 4.9, 5.0],
     profileCard: {
       title: "KPCIA 협회 운영사무국장",
       bio: "한국 프레스티지 기업 강사 협회 공식 운영 계정입니다. 강의 공고 및 프로그램 사용료(로열티) 누적 정산을 담당합니다.",
@@ -61,6 +64,8 @@ export const INITIAL_USERS: UserProfile[] = [
       education: ["서울대학교 교육공학 석사"],
       contactEmail: "admin@kpcia.or.kr",
       contactPhone: "02-1234-5678",
+      region: "서울 / 전국",
+      bankAccount: "신한은행 110-382-991201 KPCIA운영사무국",
       cardTheme: "gold_luxury"
     },
     badges: [
@@ -75,6 +80,474 @@ export const INITIAL_USERS: UserProfile[] = [
     ],
     createdAt: "2026-01-01T00:00:00Z",
     updatedAt: "2026-01-01T00:00:00Z"
+  },
+  {
+    uid: "user_gu_gyojun",
+    email: "gu@kpcia.or.kr",
+    name: "구교준",
+    tier: "Prestige Legend",
+    mileage: 1250000,
+    isAdmin: false,
+    loginId: "gu_master",
+    password: "1234",
+    isApproved: true,
+    emailVerified: true,
+    lectureCount: 146,
+    averageRating: 4.96,
+    lectureRatings: [5.0, 5.0, 4.9, 5.0, 4.9, 5.0],
+    profileCard: {
+      title: "KPCIA 협회 대표이사 / 수석 마스터 강사",
+      bio: "대기업 및 공공기관 1,500회 이상 출강. 감각 힐링 및 ESG 지속가능성 조직문화 분야 대한민국 최고 권위자입니다.",
+      specialties: ["ESG 힐링 특강", "감각 테라피", "임직원 웰니스", "리더십 소양"],
+      career: ["인사이트9교육연구소 대표이사", "KPCIA 사단법인 한국기업강사협회장", "삼성·현대·SK 전사 힐링 특강 총괄"],
+      education: ["연세대학교 경영대학원 석사", "고려대학교 최고경영자과정 수료"],
+      contactEmail: "gu@kpcia.or.kr",
+      contactPhone: "010-7212-0089",
+      region: "서울 / 경기 / 전국",
+      bankAccount: "신한은행 110-382-991201 구교준",
+      cardTheme: "gold_luxury"
+    },
+    badges: [
+      {
+        id: "badge_legend_gu",
+        tier: "Prestige Legend",
+        title: "Prestige Legend 최고 영예 마스터 배지",
+        description: "협회를 빛낸 전설적인 출강 업적과 명강의를 인증하는 최고 등급 루비 왕관 배지입니다.",
+        iconType: "emerald_crown",
+        dateGranted: "2026-01-01"
+      }
+    ],
+    createdAt: "2022-10-01T00:00:00Z",
+    updatedAt: "2026-09-01T00:00:00Z"
+  },
+  {
+    uid: "user_choi_wonseok",
+    email: "choi.ws@kpcia.or.kr",
+    name: "최원석",
+    tier: "Prestige Legend",
+    mileage: 840000,
+    isAdmin: false,
+    loginId: "choi_legend",
+    password: "1234",
+    isApproved: true,
+    emailVerified: true,
+    lectureCount: 88,
+    averageRating: 4.93,
+    lectureRatings: [5.0, 4.9, 5.0, 4.8, 5.0],
+    profileCard: {
+      title: "경영 리더십 & 비전 얼라인먼트 총괄 수석강사",
+      bio: "급변하는 글로벌 경영 환경 속에서 핵심 인재의 동기부여와 조직 비전 몰입을 이끄는 실전 리더십 솔루션을 제공합니다.",
+      specialties: ["비전 얼라인먼트", "경영 리더십", "조직 역량 강화", "임원 코칭"],
+      career: ["前 현대그룹 인재개발원 상무", "KPCIA 리더십 분과 마스터 교수", "포춘 500대 기업 전임 코치"],
+      education: ["고려대학교 교육대학원 HRD 석사"],
+      contactEmail: "choi.ws@kpcia.or.kr",
+      contactPhone: "010-3344-9811",
+      region: "서울 / 수도권",
+      bankAccount: "국민은행 421202-01-381920 최원석",
+      cardTheme: "gold_luxury"
+    },
+    badges: [
+      {
+        id: "badge_legend_choi",
+        tier: "Prestige Legend",
+        title: "Prestige Legend 리더십 훈장",
+        description: "탁월한 리더십 솔루션과 최상위 강의 평가를 공인하는 레전드 디지털 훈장입니다.",
+        iconType: "emerald_crown",
+        dateGranted: "2023-03-15"
+      }
+    ],
+    createdAt: "2023-01-10T00:00:00Z",
+    updatedAt: "2026-08-20T00:00:00Z"
+  },
+  {
+    uid: "user_kang_taeyang",
+    email: "kang.ty@kpcia.or.kr",
+    name: "강태양",
+    tier: "Prestige Elite",
+    mileage: 620000,
+    isAdmin: false,
+    loginId: "kang_elite",
+    password: "1234",
+    isApproved: true,
+    emailVerified: true,
+    lectureCount: 72,
+    averageRating: 4.91,
+    lectureRatings: [5.0, 4.9, 4.8, 5.0, 4.9],
+    profileCard: {
+      title: "대규모 감각 힐링 콘서트 & 웰니스 테라피 디렉터",
+      bio: "300인 이상 전사 창립기념 힐링 콘서트 및 감각 체험 워크숍 전문 기획 및 직강 매칭을 전담합니다.",
+      specialties: ["대규모 힐링 콘서트", "스트레스 완화 EAP", "사운드 & 컬러 테라피"],
+      career: ["대규모 기업 워크숍 총괄 디렉터", "KPCIA 웰니스 분과 부위원장", "공공기관 힐링 연수 전임"],
+      education: ["한국예술종합학교 문화예술기획 석사"],
+      contactEmail: "kang.ty@kpcia.or.kr",
+      contactPhone: "010-7766-3344",
+      region: "전국",
+      bankAccount: "하나은행 281-910293-18205 강태양",
+      cardTheme: "elite_emerald"
+    },
+    badges: [
+      {
+        id: "badge_elite_kang",
+        tier: "Prestige Elite",
+        title: "Prestige Elite 에메랄드 왕관",
+        description: "대규모 출강 무대를 압도하는 기획력과 진행 역량을 공인하는 최고 배지입니다.",
+        iconType: "emerald_crown",
+        dateGranted: "2023-08-01"
+      }
+    ],
+    createdAt: "2023-05-01T00:00:00Z",
+    updatedAt: "2026-09-02T00:00:00Z"
+  },
+  {
+    uid: "user_park_junhyuk",
+    email: "park.jh@kpcia.or.kr",
+    name: "박준혁",
+    tier: "Prestige Elite",
+    mileage: 530000,
+    isAdmin: false,
+    loginId: "park_elite",
+    password: "1234",
+    isApproved: true,
+    emailVerified: true,
+    lectureCount: 65,
+    averageRating: 4.89,
+    lectureRatings: [4.9, 4.8, 5.0, 4.9, 4.9],
+    profileCard: {
+      title: "ESG 친환경 업사이클링 & 기업 출강 수석연구원",
+      bio: "기업의 지속가능경영(ESG) 철학을 실천적인 업사이클링 교구재와 접목한 맞춤형 체험 교육 전문 연구원입니다.",
+      specialties: ["친환경 ESG 공예", "폐자원 업사이클링", "탄소중립 워크숍", "친환경 비누"],
+      career: ["인사이트9 교육연구소 수석연구원", "KPCIA 친환경 공예 교육 분과장", "환경부 인증 교육사"],
+      education: ["서울과학기술대학교 환경디자인학 석사"],
+      contactEmail: "park.jh@kpcia.or.kr",
+      contactPhone: "010-8822-1100",
+      region: "서울 / 경기 / 충청",
+      bankAccount: "우리은행 1002-831-928172 박준혁",
+      cardTheme: "elite_emerald"
+    },
+    badges: [
+      {
+        id: "badge_elite_park",
+        tier: "Prestige Elite",
+        title: "Prestige Elite 친환경 마스터",
+        description: "친환경 ESG 교육 분야의 모범적인 커리큘럼 개발과 출강 공로를 인증합니다.",
+        iconType: "emerald_crown",
+        dateGranted: "2023-11-20"
+      }
+    ],
+    createdAt: "2023-07-15T00:00:00Z",
+    updatedAt: "2026-08-25T00:00:00Z"
+  },
+  {
+    uid: "user_lee_soyeon",
+    email: "lee.sy@kpcia.or.kr",
+    name: "이소연",
+    tier: "Prestige Master",
+    mileage: 460000,
+    isAdmin: false,
+    loginId: "lee_master",
+    password: "1234",
+    isApproved: true,
+    emailVerified: true,
+    lectureCount: 54,
+    averageRating: 4.92,
+    lectureRatings: [5.0, 5.0, 4.9, 4.8, 4.9],
+    profileCard: {
+      title: "플로럴 아로마 테라피 & 힐링 가드닝 수석강사",
+      bio: "도심 속 직장인들의 심리적 치유와 정서 안정을 위한 반려식물 테라피 및 천연 아로마 힐링 솔루션을 이끕니다.",
+      specialties: ["테라리움 & 이끼공예", "아로마 롤온 조향", "플라워 캔들", "원예치료"],
+      career: ["한국원예치료협회 수석위원", "KPCIA 아로마 테라피 수석강사", "전국 기업 출강 500회"],
+      education: ["건국대학교 농축대학원 원예치료학 석사"],
+      contactEmail: "lee.sy@kpcia.or.kr",
+      contactPhone: "010-9944-2233",
+      region: "서울 / 경기 / 강원",
+      bankAccount: "기업은행 010-9944-2233 이소연",
+      cardTheme: "midnight_sapphire"
+    },
+    badges: [
+      {
+        id: "badge_master_lee",
+        tier: "Prestige Master",
+        title: "Prestige Master 루비 별 배지",
+        description: "최고 수준의 감각 치유 및 원예 테라피 전문성을 입증하는 마스터 훈장입니다.",
+        iconType: "ruby_star",
+        dateGranted: "2024-02-10"
+      }
+    ],
+    createdAt: "2023-09-01T00:00:00Z",
+    updatedAt: "2026-08-30T00:00:00Z"
+  },
+  {
+    uid: "user_jung_woosung",
+    email: "jung.ws@kpcia.or.kr",
+    name: "정우성",
+    tier: "Prestige Master",
+    mileage: 390000,
+    isAdmin: false,
+    loginId: "jung_master",
+    password: "1234",
+    isApproved: true,
+    emailVerified: true,
+    lectureCount: 48,
+    averageRating: 4.90,
+    lectureRatings: [4.9, 4.9, 5.0, 4.8, 4.9],
+    profileCard: {
+      title: "심신안정 EAP & 스트레스 극복 심리코칭 마스터",
+      bio: "경찰·소방 공무원 및 감정노동 격무 부서 임직원 심신안정 특화 EAP 회복탄력성 심리치유 전문 강사입니다.",
+      specialties: ["공무원 EAP 심신안정", "회복탄력성 코칭", "감정관리", "힐링 명상"],
+      career: ["국가공무원인재개발원 초빙교수", "KPCIA 멘탈헬스 코칭 분과장", "EAP 심리상담 10년"],
+      education: ["중앙대학교 상담심리학 석사"],
+      contactEmail: "jung.ws@kpcia.or.kr",
+      contactPhone: "010-5566-7788",
+      region: "전국",
+      bankAccount: "농협은행 302-0192-3841-11 정우성",
+      cardTheme: "midnight_sapphire"
+    },
+    badges: [
+      {
+        id: "badge_master_jung",
+        tier: "Prestige Master",
+        title: "Prestige Master 심리코칭 훈장",
+        description: "임직원 마음건강 케어와 심신 회복 분야의 탁월한 강의 역량을 인증합니다.",
+        iconType: "ruby_star",
+        dateGranted: "2024-05-18"
+      }
+    ],
+    createdAt: "2023-11-15T00:00:00Z",
+    updatedAt: "2026-08-15T00:00:00Z"
+  },
+  {
+    uid: "user_kim_minjae",
+    email: "kim.mj@kpcia.or.kr",
+    name: "김민재",
+    tier: "Prestige Professional",
+    mileage: 310000,
+    isAdmin: false,
+    loginId: "kim_pro",
+    password: "1234",
+    isApproved: true,
+    emailVerified: true,
+    lectureCount: 38,
+    averageRating: 4.86,
+    lectureRatings: [4.9, 4.8, 4.8, 5.0, 4.8],
+    profileCard: {
+      title: "조직 활성화 & 인터랙티브 팀빌딩 다이내믹스 강사",
+      bio: "일방적 주입식 강의를 넘어 동료와 협업하고 신나게 몰입하는 감각 체험형 팀빌딩 워크숍 전문가입니다.",
+      specialties: ["팀빌딩 다이내믹스", "소통과 협업", "게이미피케이션 워크숍", "비전 보드"],
+      career: ["기업교육 HR 컨설팅 7년", "KPCIA 인터랙티브 러닝 전임 연구원", "신임 팀장 워크숍 전문"],
+      education: ["한양대학교 교육공학과 학사"],
+      contactEmail: "kim.mj@kpcia.or.kr",
+      contactPhone: "010-4433-2211",
+      region: "서울 / 경기 / 인천",
+      bankAccount: "카카오뱅크 3333-01-9283741 김민재",
+      cardTheme: "classic"
+    },
+    badges: [
+      {
+        id: "badge_pro_kim",
+        tier: "Prestige Professional",
+        title: "Prestige Professional 사파이어 방패",
+        description: "고난도 커뮤니케이션과 인터랙티브 팀빌딩 진행 능력을 공인하는 전문가 배지입니다.",
+        iconType: "sapphire_shield",
+        dateGranted: "2024-08-20"
+      }
+    ],
+    createdAt: "2024-01-20T00:00:00Z",
+    updatedAt: "2026-07-28T00:00:00Z"
+  },
+  {
+    uid: "user_han_jieun",
+    email: "han.je@kpcia.or.kr",
+    name: "한지은",
+    tier: "Prestige Professional",
+    mileage: 270000,
+    isAdmin: false,
+    loginId: "han_pro",
+    password: "1234",
+    isApproved: true,
+    emailVerified: true,
+    lectureCount: 32,
+    averageRating: 4.88,
+    lectureRatings: [4.9, 4.9, 4.8, 4.9, 4.9],
+    profileCard: {
+      title: "마인드풀니스 & 감정노동 힐링 테라피 전문강사",
+      bio: "고객 접점 부서 임직원의 정서적 소진(Burnout) 예방과 마인드풀니스 향기 테라피를 접목한 회복 특강 전문.",
+      specialties: ["감정노동 치유", "마인드풀니스", "천연 조향 테라피", "셀프 케어"],
+      career: ["CS 감정치유 전문 강사", "KPCIA 웰니스 분과 정회원", "병원·콜센터 전담 EAP 강사"],
+      education: ["이화여자대학교 소비자학과 학사"],
+      contactEmail: "han.je@kpcia.or.kr",
+      contactPhone: "010-6677-8899",
+      region: "서울 / 수도권 / 대전",
+      bankAccount: "신한은행 110-492-182901 한지은",
+      cardTheme: "classic"
+    },
+    badges: [
+      {
+        id: "badge_pro_han",
+        tier: "Prestige Professional",
+        title: "Prestige Professional 사파이어 훈장",
+        description: "정서 치유 및 감정 소통 워크숍 역량을 완벽하게 공인하는 전문 자격 배지입니다.",
+        iconType: "sapphire_shield",
+        dateGranted: "2024-10-12"
+      }
+    ],
+    createdAt: "2024-03-05T00:00:00Z",
+    updatedAt: "2026-08-01T00:00:00Z"
+  },
+  {
+    uid: "user_yoon_seojun",
+    email: "yoon.sj@kpcia.or.kr",
+    name: "윤서준",
+    tier: "Prestige Professional",
+    mileage: 240000,
+    isAdmin: false,
+    loginId: "yoon_pro",
+    password: "1234",
+    isApproved: true,
+    emailVerified: true,
+    lectureCount: 29,
+    averageRating: 4.87,
+    lectureRatings: [4.8, 4.9, 4.9, 4.9, 4.8],
+    profileCard: {
+      title: "전통 자개 코스터 & 프리미엄 가죽 수공예 마스터",
+      bio: "천연 자개와 가죽의 고급스러운 질감을 손끝으로 매만지며 몰입과 성취감을 안겨주는 고품격 공예 힐링 강사.",
+      specialties: ["전통 자개 코스터", "가죽 공예 소품", "원데이 핸드메이드", "전통 문양 디자인"],
+      career: ["한국공예문화진흥원 인증 공예가", "KPCIA 프리미엄 공예 분과 정회원", "문화센터 전임 출강"],
+      education: ["홍익대학교 금속조형디자인학과 학사"],
+      contactEmail: "yoon.sj@kpcia.or.kr",
+      contactPhone: "010-1122-3344",
+      region: "서울 / 경기",
+      bankAccount: "국민은행 812902-04-192837 윤서준",
+      cardTheme: "classic"
+    },
+    badges: [
+      {
+        id: "badge_pro_yoon",
+        tier: "Prestige Professional",
+        title: "Prestige Professional 공예 배지",
+        description: "독창적인 수공예 커리큘럼 설계 및 고품질 교구재 활용 능력을 인증합니다.",
+        iconType: "sapphire_shield",
+        dateGranted: "2024-11-25"
+      }
+    ],
+    createdAt: "2024-04-18T00:00:00Z",
+    updatedAt: "2026-07-20T00:00:00Z"
+  },
+  {
+    uid: "user_song_minji",
+    email: "song.mj@kpcia.or.kr",
+    name: "송민지",
+    tier: "Prestige Associate",
+    mileage: 160000,
+    isAdmin: false,
+    loginId: "song_assoc",
+    password: "1234",
+    isApproved: true,
+    emailVerified: true,
+    lectureCount: 18,
+    averageRating: 4.82,
+    lectureRatings: [4.8, 4.9, 4.8, 4.8, 4.8],
+    profileCard: {
+      title: "오피스 데스크테리어 & 프리미엄 아로마 디퓨저 강사",
+      bio: "업무 공간을 쾌적하고 힐링되는 쉼의 쉼터로 변모시키는 사무환경 웰빙 디퓨징 및 테라피 전문 강사입니다.",
+      specialties: ["오피스 데스크테리어", "천연 디퓨저", "아로마 룸스프레이", "석고 방향제"],
+      career: ["국제아로마테라피스트(IFA)", "KPCIA 어소시에이트 전임", "사내 동호회 출강 100회"],
+      education: ["숙명여자대학교 화학과 학사"],
+      contactEmail: "song.mj@kpcia.or.kr",
+      contactPhone: "010-2233-4455",
+      region: "서울 / 경기",
+      bankAccount: "토스뱅크 1000-2918-3841 송민지",
+      cardTheme: "classic"
+    },
+    badges: [
+      {
+        id: "badge_assoc_song",
+        tier: "Prestige Associate",
+        title: "Prestige Associate 청동 훈장",
+        description: "KPCIA 공인 전문 강사로서 신뢰할 수 있는 현장 출강 역량을 인증합니다.",
+        iconType: "bronze_medal",
+        dateGranted: "2025-01-15"
+      }
+    ],
+    createdAt: "2024-08-10T00:00:00Z",
+    updatedAt: "2026-06-30T00:00:00Z"
+  },
+  {
+    uid: "user_cho_hyunwoo",
+    email: "cho.hw@kpcia.or.kr",
+    name: "조현우",
+    tier: "Prestige Associate",
+    mileage: 140000,
+    isAdmin: false,
+    loginId: "cho_assoc",
+    password: "1234",
+    isApproved: true,
+    emailVerified: true,
+    lectureCount: 15,
+    averageRating: 4.80,
+    lectureRatings: [4.8, 4.8, 4.9, 4.7, 4.8],
+    profileCard: {
+      title: "신입사원 비즈니스 매너 & 상호 존중 커뮤니케이션 강사",
+      bio: "MZ 신규 입사자의 조직 안착과 프로페셔널한 비즈니스 에티켓을 친근하게 전달하는 영 프레스티지 강사.",
+      specialties: ["신입 비즈니스 매너", "비즈니스 이메일 작성법", "상호 존중 소통", "프레젠테이션 스킬"],
+      career: ["기업 신입 입문과정 전문 강사", "KPCIA 청년 강사단 간사", "취업 멘토링 4년"],
+      education: ["경희대학교 신문방송학과 학사"],
+      contactEmail: "cho.hw@kpcia.or.kr",
+      contactPhone: "010-9988-7766",
+      region: "서울 / 경기 / 충북",
+      bankAccount: "우리은행 1002-491-029381 조현우",
+      cardTheme: "classic"
+    },
+    badges: [
+      {
+        id: "badge_assoc_cho",
+        tier: "Prestige Associate",
+        title: "Prestige Associate 청동 훈장",
+        description: "KPCIA 공인 전문 강사로서 신뢰할 수 있는 비즈니스 매너 출강 역량을 인증합니다.",
+        iconType: "bronze_medal",
+        dateGranted: "2025-03-20"
+      }
+    ],
+    createdAt: "2024-10-05T00:00:00Z",
+    updatedAt: "2026-07-10T00:00:00Z"
+  },
+  {
+    uid: "user_kim_dohyun",
+    email: "kim.dh@kpcia.or.kr",
+    name: "김도현",
+    tier: "Prestige Member",
+    mileage: 95000,
+    isAdmin: false,
+    loginId: "kim_member",
+    password: "1234",
+    isApproved: true,
+    emailVerified: true,
+    lectureCount: 9,
+    averageRating: 4.76,
+    lectureRatings: [4.8, 4.7, 4.8, 4.8, 4.7],
+    profileCard: {
+      title: "천연 CP 비누 & 업사이클링 생활공예 프로 강사",
+      bio: "친환경 제로웨이스트 천연 주물럭 비누 및 생활 공예 교구재 제작을 통해 환경 감수성을 키우는 실습 중심 강사.",
+      specialties: ["천연 주물럭 비누", "친환경 생활공예", "제로웨이스트 워크숍", "친환경 수세미"],
+      career: ["천연비누 전문 제조 강사", "KPCIA 정회원", "지역 공방 대표 5년"],
+      education: ["단국대학교 응용화학과 학사"],
+      contactEmail: "kim.dh@kpcia.or.kr",
+      contactPhone: "010-5544-3322",
+      region: "서울 / 경기 / 강원",
+      bankAccount: "신한은행 110-501-928374 김도현",
+      cardTheme: "classic"
+    },
+    badges: [
+      {
+        id: "badge_member_kim",
+        tier: "Prestige Member",
+        title: "Prestige Member 정회원 인증 배지",
+        description: "KPCIA 공식 인증 정회원 자격을 공인하는 디지털 인증 배지입니다.",
+        iconType: "bronze_medal",
+        dateGranted: "2025-05-10"
+      }
+    ],
+    createdAt: "2025-01-12T00:00:00Z",
+    updatedAt: "2026-06-15T00:00:00Z"
   }
 ];
 
@@ -277,7 +750,17 @@ export class StorageService {
   }
 
   static getLocalUsers(): UserProfile[] {
-    const rawList = this.getLocal<UserProfile[]>('users', INITIAL_USERS);
+    let rawList = this.getLocal<UserProfile[]>('users', INITIAL_USERS);
+    if (!rawList || rawList.length === 0) {
+      rawList = INITIAL_USERS;
+      this.setLocal('users', rawList);
+    }
+    const rawIds = new Set(rawList.map(u => u.uid));
+    const missing = INITIAL_USERS.filter(u => !rawIds.has(u.uid));
+    if (missing.length > 0) {
+      rawList = [...rawList, ...missing];
+      this.setLocal('users', rawList);
+    }
     return rawList.map(u => ({
       ...u,
       isApproved: u.isApproved !== undefined ? u.isApproved : true,
@@ -289,36 +772,23 @@ export class StorageService {
   }
 
   static getLocalLectures(): LectureRequest[] {
+    const validIds = new Set(INITIAL_LECTURES.map(l => l.id));
     let raw = this.getLocal<LectureRequest[]>('lectures', INITIAL_LECTURES);
-    if (!raw || raw.length === 0) {
+    // Filter out legacy lectures not in current INITIAL_LECTURES
+    raw = (raw || []).filter(l => validIds.has(l.id));
+    if (raw.length === 0) {
       raw = INITIAL_LECTURES;
-      this.setLocal('lectures', raw);
     }
-    
-    // Ensure all INITIAL_LECTURES (including all open matching notices) are present in raw
     const rawIds = new Set(raw.map(l => l.id));
     const missing = INITIAL_LECTURES.filter(l => !rawIds.has(l.id));
     if (missing.length > 0) {
       raw = [...raw, ...missing];
-      this.setLocal('lectures', raw);
     }
-    
-    // Enrich with companyName and metadata from INITIAL_LECTURES if missing for historical items
-    const initialMap = new Map(INITIAL_LECTURES.map(l => [l.id, l]));
-    const enriched = raw.map(l => {
-      const initItem = initialMap.get(l.id);
-      if (initItem) {
-        return {
-          ...l,
-          companyName: (!l.companyName || l.companyName.trim() === '') ? initItem.companyName : l.companyName,
-          title: (!l.title || l.title.trim() === '') ? initItem.title : l.title,
-          description: (!l.description || l.description.trim() === '') ? initItem.description : l.description
-        };
-      }
-      return l;
-    });
-
-    return enriched.filter(l => l.id !== 'lect_samsung_ai' && l.id !== 'lect_naver_prompt' && l.id !== 'lect_skt_leadership');
+    this.setLocal('lectures', raw);
+    return raw.map(l => ({
+      ...l,
+      applicants: Array.isArray(l.applicants) ? l.applicants : []
+    }));
   }
 
   static getLocalPrograms(): EducationalProgram[] {
@@ -656,17 +1126,17 @@ export class StorageService {
       const list: UserProfile[] = [];
       snap.forEach(d => list.push(d.data() as UserProfile));
       
-      // Prevent empty cloud snapshot from wiping local storage
-      if (list.length === 0) {
-        const local = this.getLocalUsers();
-        if (local.length > 0) {
-          console.log("Firestore 'users' collection is empty. Retaining local data and uploading to cloud...");
-          local.forEach(u => setDoc(doc(db, 'users', u.uid), this.cleanUndefined(u)).catch(console.warn));
-          return;
-        }
+      // Ensure all 13 INITIAL_USERS are preserved even if cloud has fewer
+      const listIds = new Set(list.map(u => u.uid));
+      const missing = INITIAL_USERS.filter(u => !listIds.has(u.uid));
+      const combined = missing.length > 0 ? [...list, ...missing] : list;
+
+      // Seed any missing instructors to cloud in the background
+      if (missing.length > 0) {
+        missing.forEach(u => setDoc(doc(db, 'users', u.uid), this.cleanUndefined(u)).catch(console.warn));
       }
       
-      const formatted = list.map(u => ({
+      const formatted = combined.map(u => ({
         ...u,
         isApproved: u.isApproved !== undefined ? u.isApproved : true,
         emailVerified: u.emailVerified !== undefined ? u.emailVerified : true,
@@ -682,27 +1152,32 @@ export class StorageService {
 
   static subscribeLectures(callback: (lectures: LectureRequest[]) => void): () => void {
     if (!useFirestore || !db) return () => {};
+    const validIds = new Set(INITIAL_LECTURES.map(l => l.id));
     return onSnapshot(collection(db, 'lectures'), (snap) => {
       const list: LectureRequest[] = [];
-      snap.forEach(d => list.push(d.data() as LectureRequest));
-      
-      // Prevent empty cloud snapshot from wiping local storage
-      if (list.length === 0) {
-        const local = this.getLocalLectures();
-        if (local.length > 0) {
-          console.log("Firestore 'lectures' collection is empty. Retaining local data and uploading to cloud...");
-          local.forEach(l => setDoc(doc(db, 'lectures', l.id), this.cleanUndefined(l)).catch(console.warn));
-          callback(local);
-          return;
+      snap.forEach(d => {
+        if (validIds.has(d.id)) {
+          list.push(d.data() as LectureRequest);
+        } else {
+          deleteDoc(doc(db, 'lectures', d.id)).catch(() => {});
         }
-      }
+      });
       
-      // Ensure active open matching requests from INITIAL_LECTURES are preserved
-      const openLectures = INITIAL_LECTURES.filter(l => l.status === 'open');
+      // Ensure all 187 INITIAL_LECTURES are preserved if missing from cloud
       const listIds = new Set(list.map(l => l.id));
-      const missingOpen = openLectures.filter(l => !listIds.has(l.id));
-      const combined = missingOpen.length > 0 ? [...missingOpen, ...list] : list;
-      callback(combined);
+      const missing = INITIAL_LECTURES.filter(l => !listIds.has(l.id));
+      const combined = missing.length > 0 ? [...list, ...missing] : list;
+      
+      // Sort in order of original index
+      const idOrder = new Map(INITIAL_LECTURES.map((l, idx) => [l.id, idx]));
+      combined.sort((a, b) => (idOrder.get(a.id) ?? 9999) - (idOrder.get(b.id) ?? 9999));
+      
+      const formatted = combined.map(l => ({
+        ...l,
+        applicants: Array.isArray(l.applicants) ? l.applicants : []
+      }));
+
+      callback(formatted);
     }, (error) => {
       console.error("subscribeLectures error:", error);
     });
@@ -831,7 +1306,14 @@ export class StorageService {
         const allIds = new Set([...localMap.keys(), ...cloudMap.keys()]);
         const mergedList: T[] = [];
 
+        const validLectureIds = colName === 'lectures' ? new Set(INITIAL_LECTURES.map(l => l.id)) : null;
+
         for (const id of allIds) {
+          if (validLectureIds && !validLectureIds.has(id)) {
+            deleteDoc(doc(db, colName, id)).catch(() => {});
+            continue;
+          }
+
           let localItem = localMap.get(id);
           let cloudItem = cloudMap.get(id);
 

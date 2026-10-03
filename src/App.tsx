@@ -330,7 +330,7 @@ export default function App() {
           ? true 
           : isRestricted
             ? (l.companyName && l.companyName.toLowerCase().includes(queryText))
-            : (l.title.toLowerCase().includes(queryText) || (l.companyName && l.companyName.toLowerCase().includes(queryText)));
+            : ((l.title || '').toLowerCase().includes(queryText) || (l.companyName && l.companyName.toLowerCase().includes(queryText)));
 
         let tierMatch = true;
         if (filterLecTier === 'all') {
@@ -400,7 +400,7 @@ export default function App() {
       if (controlRoomStatus !== 'all' && l.status !== controlRoomStatus) return false;
       if (controlRoomSearch.trim()) {
         const q = controlRoomSearch.toLowerCase();
-        return l.title.toLowerCase().includes(q) || 
+        return (l.title || '').toLowerCase().includes(q) || 
                (l.companyName || '').toLowerCase().includes(q) || 
                (l.partnerCompany || '').toLowerCase().includes(q) || 
                (l.location || '').toLowerCase().includes(q);
@@ -964,13 +964,13 @@ export default function App() {
       return;
     }
 
-    if (lect.applicants.includes(currentUser.uid)) {
+    if ((lect.applicants || []).includes(currentUser.uid)) {
       triggerToast("이미 출강 신청이 완료된 강의 공고입니다.", "info");
       return;
     }
 
     // Perform application
-    const updatedApplicants = [...lect.applicants, currentUser.uid];
+    const updatedApplicants = [...(lect.applicants || []), currentUser.uid];
     const updatedLect: LectureRequest = {
       ...lect,
       applicants: updatedApplicants
@@ -1306,7 +1306,7 @@ export default function App() {
           const materialFee = attendees * materialCost;
           const computedBudget = mainFee + assistantFee + materialFee;
 
-          const matchedProgram = programs.find(p => title.includes(p.title) || p.title.includes(title));
+          const matchedProgram = programs.find(p => title && p?.title && (title.includes(p.title) || p.title.includes(title)));
           const isMatchedApproved = matchedProgram && matchedProgram.isApproved;
           const computedRoyalty = isMatchedApproved ? Math.round((computedBudget * (matchedProgram.royaltyRate || 0)) / 100) : 0;
 
@@ -3724,7 +3724,7 @@ export default function App() {
                   <>
                     <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
                       {paginatedLectures.map(lecture => {
-                        const hasApplied = currentUser && lecture.applicants.includes(currentUser.uid);
+                        const hasApplied = currentUser && (lecture.applicants || []).includes(currentUser.uid);
                         const userRank = currentUser ? getTierRank(currentUser.tier) : 0;
                         const targetRank = getTierRank(lecture.targetTier);
                         const isRestricted = !currentUser?.isAdmin && (userRank < targetRank);
@@ -7431,7 +7431,7 @@ export default function App() {
 
                     <div className="flex items-center gap-3 ml-auto">
                       {currentModalLec.status === 'open' && (() => {
-                        const hasApplied = currentUser && currentModalLec.applicants.includes(currentUser.uid);
+                        const hasApplied = currentUser && (currentModalLec.applicants || []).includes(currentUser.uid);
                         const userRank = currentUser ? getTierRank(currentUser.tier) : 1;
                         const targetRank = getTierRank(currentModalLec.targetTier);
                         const isInsufficientTier = currentUser && !currentUser.isAdmin && (userRank < targetRank);
@@ -7440,7 +7440,7 @@ export default function App() {
                           return (
                             <div className="flex items-center gap-3">
                               <span className="text-[11px] text-neutral-400 font-medium">
-                                신청 강사: <strong className="text-[#D4AF37]">{currentModalLec.applicants.length}명</strong>
+                                신청 강사: <strong className="text-[#D4AF37]">{(currentModalLec.applicants || []).length}명</strong>
                               </span>
                               <button
                                 type="button"
@@ -7463,7 +7463,7 @@ export default function App() {
                           return (
                             <div className="flex items-center gap-3">
                               <span className="text-[11px] text-neutral-400 font-medium">
-                                신청 강사: <strong className="text-[#D4AF37]">{currentModalLec.applicants.length}명</strong>
+                                신청 강사: <strong className="text-[#D4AF37]">{(currentModalLec.applicants || []).length}명</strong>
                               </span>
                               <button
                                 disabled={true}
@@ -7480,7 +7480,7 @@ export default function App() {
                         return (
                           <div className="flex items-center gap-3">
                             <span className="text-[11px] text-neutral-400 font-medium">
-                              신청 강사: <strong className="text-[#D4AF37]">{currentModalLec.applicants.length}명</strong>
+                              신청 강사: <strong className="text-[#D4AF37]">{(currentModalLec.applicants || []).length}명</strong>
                             </span>
                             <button
                               onClick={() => handleApplyLecture(currentModalLec.id)}

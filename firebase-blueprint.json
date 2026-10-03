@@ -2,14 +2,27 @@
   "entities": {
     "User": {
       "title": "User Profile",
-      "description": "Instructor profiles containing user tier, mileage, name, badging, and profile card details.",
+      "description": "Instructor profiles containing user tier, credentials, contact, and profile details.",
       "type": "object",
       "properties": {
         "uid": { "type": "string" },
         "email": { "type": "string" },
         "name": { "type": "string" },
-        "tier": { "type": "string", "enum": ["Prestige Member", "Prestige Associate", "Prestige Professional", "Prestige Master", "Prestige Elite"] },
+        "tier": { 
+          "type": "string", 
+          "enum": ["Prestige Member", "Prestige Associate", "Prestige Professional", "Prestige Master", "Prestige Elite", "Prestige Legend"] 
+        },
         "mileage": { "type": "integer" },
+        "isAdmin": { "type": "boolean" },
+        "isApproved": { "type": "boolean" },
+        "emailVerified": { "type": "boolean" },
+        "loginId": { "type": "string" },
+        "password": { "type": "string" },
+        "organizationName": { "type": "string" },
+        "lectureCount": { "type": "integer" },
+        "averageRating": { "type": "number" },
+        "lectureRatings": { "type": "array" },
+        "assistantEvaluations": { "type": "array" },
         "profileCard": {
           "type": "object",
           "properties": {
@@ -17,8 +30,15 @@
             "bio": { "type": "string" },
             "specialties": { "type": "array" },
             "career": { "type": "array" },
+            "education": { "type": "array" },
+            "contactEmail": { "type": "string" },
+            "contactPhone": { "type": "string" },
             "imageUrl": { "type": "string" },
-            "pdfUrl": { "type": "string" }
+            "pdfUrl": { "type": "string" },
+            "cardTheme": { "type": "string" },
+            "bankAccount": { "type": "string" },
+            "region": { "type": "string" },
+            "websiteUrl": { "type": "string" }
           }
         },
         "badges": { "type": "array" },
@@ -29,30 +49,51 @@
     },
     "Lecture": {
       "title": "Lecture Request",
-      "description": "Lecture requests posted by admin.",
+      "description": "Corporate lecture postings, matching, and completed historical lecture archives.",
       "type": "object",
       "properties": {
         "id": { "type": "string" },
         "title": { "type": "string" },
+        "companyName": { "type": "string" },
+        "partnerCompany": { "type": "string" },
         "description": { "type": "string" },
-        "targetTier": { "type": "string" },
+        "targetTier": { 
+          "type": "string", 
+          "enum": ["Prestige Member", "Prestige Associate", "Prestige Professional", "Prestige Master", "Prestige Elite", "Prestige Legend"] 
+        },
         "budget": { "type": "integer" },
         "mileageRoyalty": { "type": "integer" },
         "programId": { "type": "string" },
+        "programTitle": { "type": "string" },
         "date": { "type": "string" },
+        "time": { "type": "string" },
         "duration": { "type": "string" },
         "location": { "type": "string" },
+        "attendees": { "type": "integer" },
+        "managerName": { "type": "string" },
+        "managerPhone": { "type": "string" },
         "status": { "type": "string", "enum": ["open", "assigned", "completed"] },
+        "settlementStatus": { "type": "string", "enum": ["pending", "completed"] },
         "assignedTo": { "type": "string" },
         "assignedName": { "type": "string" },
         "applicants": { "type": "array" },
-        "createdAt": { "type": "string", "format": "date-time" }
+        "mainHours": { "type": "number" },
+        "assistantHours": { "type": "number" },
+        "materialCost": { "type": "integer" },
+        "budgetOption": { "type": "string" },
+        "assistantId": { "type": "string" },
+        "assistantName": { "type": "string" },
+        "assistantEvaluated": { "type": "boolean" },
+        "lectureRating": { "type": "number" },
+        "surveyUrl": { "type": "string" },
+        "createdAt": { "type": "string" },
+        "updatedAt": { "type": "string" }
       },
       "required": ["id", "title", "targetTier", "status"]
     },
     "Program": {
       "title": "Educational Program",
-      "description": "Programs developed by the association or members.",
+      "description": "Programs developed by the association or members with curriculum and royalties.",
       "type": "object",
       "properties": {
         "id": { "type": "string" },
@@ -61,7 +102,11 @@
         "authorId": { "type": "string" },
         "authorName": { "type": "string" },
         "royaltyRate": { "type": "integer" },
-        "createdAt": { "type": "string", "format": "date-time" }
+        "curriculum": { "type": "array" },
+        "targetAudience": { "type": "string" },
+        "isApproved": { "type": "boolean" },
+        "surveyUrl": { "type": "string" },
+        "createdAt": { "type": "string" }
       },
       "required": ["id", "title", "authorId", "authorName"]
     },
@@ -72,11 +117,12 @@
       "properties": {
         "id": { "type": "string" },
         "userId": { "type": "string" },
-        "type": { "type": "string", "enum": ["royalty", "admin_adjust", "lecture_payout"] },
+        "userName": { "type": "string" },
+        "type": { "type": "string", "enum": ["royalty", "admin_adjust", "lecture_payout", "program_register"] },
         "amount": { "type": "integer" },
         "description": { "type": "string" },
         "relatedId": { "type": "string" },
-        "createdAt": { "type": "string", "format": "date-time" }
+        "createdAt": { "type": "string" }
       },
       "required": ["id", "userId", "type", "amount", "createdAt"]
     },
@@ -93,7 +139,7 @@
         "title": { "type": "string" },
         "content": { "type": "string" },
         "status": { "type": "string", "enum": ["pending", "reviewed", "accepted", "declined"] },
-        "createdAt": { "type": "string", "format": "date-time" }
+        "createdAt": { "type": "string" }
       },
       "required": ["id", "companyName", "proposerName", "email", "phone", "title", "content", "status", "createdAt"]
     }

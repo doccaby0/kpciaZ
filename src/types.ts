@@ -85,9 +85,10 @@ export interface LectureRequest {
   managerPhone?: string; // Contact manager phone number
   status: 'open' | 'assigned' | 'completed';
   settlementStatus?: 'pending' | 'completed'; // Settlement processing status
+  settlementDueDate?: string; // Scheduled settlement date (e.g. YYYY-MM-DD)
   assignedTo?: string; // User ID of the assigned instructor
   assignedName?: string; // Name of the assigned instructor
-  applicants: string[]; // User IDs of instructors who applied
+  applicants?: string[]; // User IDs of instructors who applied
   createdAt: string;
   mainHours?: number;
   assistantHours?: number;

@@ -1,25 +1,12 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-
-    // Global allowance for all collections to ensure robust cross-device syncing
-    match /users/{userId} {
-      allow read, write: if true;
-    }
-
     match /lectures/{lectureId} {
-      allow read, write: if true;
+      // Reject legacy lecture IDs from stale client tabs
+      allow write: if !lectureId.matches('^lect_hist_.*') && !lectureId.matches('^lect_open_.*');
+      allow read: if true;
     }
-
-    match /programs/{programId} {
-      allow read, write: if true;
-    }
-
-    match /transactions/{transactionId} {
-      allow read, write: if true;
-    }
-
-    match /proposals/{proposalId} {
+    match /{document=**} {
       allow read, write: if true;
     }
   }
