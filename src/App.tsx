@@ -25,6 +25,7 @@ import {
   Sparkles, 
   TrendingUp, 
   ArrowRight, 
+  ArrowUpDown,
   Plus, 
   LogIn, 
   X, 
@@ -271,6 +272,8 @@ export default function App() {
   const [excelStatusFilter, setExcelStatusFilter] = useState<string>('all');
   const [excelPage, setExcelPage] = useState<number>(1);
   const [excelItemsPerPage, setExcelItemsPerPage] = useState<number>(15);
+  const [excelSortField, setExcelSortField] = useState<'date' | 'company' | 'partner' | 'title' | 'tier' | 'mainHours' | 'attendees' | 'materialCost' | 'royalty' | 'budget' | 'rating' | 'status' | 'instructor'>('date');
+  const [excelSortDirection, setExcelSortDirection] = useState<'asc' | 'desc'>('desc');
 
   const [editLecTier, setEditLecTier] = useState<InstructorTier>('Prestige Member');
   const [editLecDate, setEditLecDate] = useState<string>('');
@@ -438,15 +441,52 @@ export default function App() {
     });
 
     return [...filtered].sort((a, b) => {
-      const parseFirstDate = (dStr: string) => {
-        if (!dStr) return 0;
-        const firstPart = dStr.split('~')[0].trim();
-        const t = new Date(firstPart).getTime();
-        return isNaN(t) ? 0 : t;
-      };
-      return parseFirstDate(a.date) - parseFirstDate(b.date);
+      let cmp = 0;
+      if (excelSortField === 'date') {
+        const parseFirstDate = (dStr: string) => {
+          if (!dStr) return 0;
+          const firstPart = dStr.split('~')[0].trim();
+          const t = new Date(firstPart).getTime();
+          return isNaN(t) ? 0 : t;
+        };
+        cmp = parseFirstDate(a.date) - parseFirstDate(b.date);
+      } else if (excelSortField === 'company') {
+        cmp = (a.companyName || '').localeCompare(b.companyName || '', 'ko-KR');
+      } else if (excelSortField === 'partner') {
+        cmp = (a.partnerCompany || '').localeCompare(b.partnerCompany || '', 'ko-KR');
+      } else if (excelSortField === 'title') {
+        cmp = (a.title || '').localeCompare(b.title || '', 'ko-KR');
+      } else if (excelSortField === 'instructor') {
+        cmp = (a.assignedName || '').localeCompare(b.assignedName || '', 'ko-KR');
+      } else if (excelSortField === 'attendees') {
+        cmp = (a.attendees || 0) - (b.attendees || 0);
+      } else if (excelSortField === 'mainHours') {
+        cmp = (a.mainHours || 0) - (b.mainHours || 0);
+      } else if (excelSortField === 'materialCost') {
+        cmp = (a.materialCost || 0) - (b.materialCost || 0);
+      } else if (excelSortField === 'royalty') {
+        cmp = (a.mileageRoyalty || 0) - (b.mileageRoyalty || 0);
+      } else if (excelSortField === 'budget') {
+        cmp = (a.budget || 0) - (b.budget || 0);
+      } else if (excelSortField === 'rating') {
+        cmp = (a.lectureRating || 0) - (b.lectureRating || 0);
+      } else if (excelSortField === 'tier') {
+        cmp = getTierRank(a.targetTier) - getTierRank(b.targetTier);
+      } else if (excelSortField === 'status') {
+        cmp = (a.status || '').localeCompare(b.status || '');
+      }
+
+      // Tie-breaker: preserve natural sequential ID order for identical values
+      if (cmp === 0) {
+        const numA = parseInt(a.id.replace(/\D/g, ''), 10) || 0;
+        const numB = parseInt(b.id.replace(/\D/g, ''), 10) || 0;
+        return numA - numB;
+      }
+
+      // Default or applied direction
+      return excelSortDirection === 'desc' ? -cmp : cmp;
     });
-  }, [lectures, excelStatusFilter, excelSearch]);
+  }, [lectures, excelStatusFilter, excelSearch, excelSortField, excelSortDirection]);
 
   // Trigger global notifications
   const triggerToast = (message: string, type: 'success' | 'info' | 'error' = 'success') => {
@@ -1677,6 +1717,19 @@ export default function App() {
       triggerToast("강사단 명부 저장 실패: " + (err.message || '오류'), "error");
     } finally {
       setIsSyncingGoogleSheets(false);
+    }
+  };
+
+  const handleResetInstructors = async () => {
+    const ok = window.confirm("정말로 소속 강사 리스트를 기본 상태로 초기화하시겠습니까?\n(기본 KPCIA 운영사무국 마스터 계정을 제외한 강사 명단이 초기화됩니다.)");
+    if (!ok) return;
+    try {
+      const resetList = await StorageService.resetUsersToInitial();
+      setUsers(resetList);
+      triggerToast("👥 소속 강사 리스트가 기본 계정으로 깨끗하게 초기화되었습니다.", "success");
+    } catch (err: any) {
+      console.error("Error resetting instructors:", err);
+      triggerToast("강사 리스트 초기화 중 오류: " + (err.message || '초기화 실패'), "error");
     }
   };
 
@@ -5787,6 +5840,20 @@ export default function App() {
                     const startIndex = (currentPage - 1) * excelItemsPerPage;
                     const paginatedItems = sorted.slice(startIndex, startIndex + excelItemsPerPage);
 
+                    const toggleExcelSort = (field: typeof excelSortField) => {
+                      if (excelSortField === field) {
+                        setExcelSortDirection(prev => prev === 'desc' ? 'asc' : 'desc');
+                      } else {
+                        setExcelSortField(field);
+                        if (['date', 'attendees', 'budget', 'rating', 'mainHours', 'materialCost', 'royalty'].includes(field)) {
+                          setExcelSortDirection('desc');
+                        } else {
+                          setExcelSortDirection('asc');
+                        }
+                      }
+                      setExcelPage(1);
+                    };
+
                     return (
                       <div className="space-y-4">
                         {/* Excel Sheet Filter & Navigation Header */}
@@ -5868,6 +5935,141 @@ export default function App() {
                           </div>
                         </div>
 
+                        {/* 📊 실시간 정산 마스터 대장 정렬 컨트롤 바 (날짜, 기관명, 인원 등 다차원 정렬 지원) */}
+                        <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 bg-[#0a0a0c] p-3 rounded-xl border border-neutral-850 text-xs">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <div className="flex items-center gap-1.5 text-neutral-300 font-extrabold text-xs">
+                              <span className="p-1 rounded bg-[#217346]/20 text-[#30925c] border border-[#217346]/40">
+                                <ArrowUpDown className="w-3.5 h-3.5" />
+                              </span>
+                              <span>대장 정렬 기준:</span>
+                            </div>
+
+                            <select
+                              value={excelSortField}
+                              onChange={(e) => {
+                                const field = e.target.value as any;
+                                setExcelSortField(field);
+                                if (['date', 'attendees', 'budget', 'rating', 'mainHours', 'materialCost', 'royalty'].includes(field)) {
+                                  setExcelSortDirection('desc');
+                                } else {
+                                  setExcelSortDirection('asc');
+                                }
+                                setExcelPage(1);
+                              }}
+                              className="bg-neutral-900 border border-neutral-750 text-white rounded-lg px-3 py-1.5 text-[11px] font-bold focus:outline-none focus:border-[#217346] cursor-pointer"
+                            >
+                              <option value="date">📅 출강일자 (날짜)</option>
+                              <option value="company">🏢 의뢰 기업명 (기관명)</option>
+                              <option value="attendees">👥 예정 인원 (명)</option>
+                              <option value="budget">💰 정산 총 예산 (원)</option>
+                              <option value="mainHours">⏱️ 강의 시간 (시간)</option>
+                              <option value="partner">🤝 지정 협력사</option>
+                              <option value="title">📚 출강 교육 명칭</option>
+                              <option value="instructor">👨‍🏫 배정 주강사</option>
+                              <option value="rating">⭐ 만족도 평점</option>
+                              <option value="tier">🎖️ 지원자격 등급</option>
+                              <option value="status">📌 출강 / 정산 현황</option>
+                              <option value="materialCost">🎨 인당 재료비</option>
+                              <option value="royalty">💎 마일리지 로열티</option>
+                            </select>
+
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setExcelSortDirection(prev => prev === 'desc' ? 'asc' : 'desc');
+                                setExcelPage(1);
+                              }}
+                              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-neutral-900 hover:bg-neutral-800 border border-neutral-750 text-white text-[11px] font-black cursor-pointer transition-all hover:scale-[1.01]"
+                              title="정렬 방향을 내림차순/오름차순으로 전환합니다."
+                            >
+                              {excelSortDirection === 'desc' ? (
+                                <>
+                                  <span className="text-emerald-400">▼ 내림차순</span>
+                                  <span className="text-[10px] text-neutral-400 font-normal">
+                                    {excelSortField === 'date' ? '(최신순)' : excelSortField === 'company' || excelSortField === 'partner' || excelSortField === 'title' || excelSortField === 'instructor' ? '(ㅎ→ㄱ)' : '(높은순)'}
+                                  </span>
+                                </>
+                              ) : (
+                                <>
+                                  <span className="text-amber-400">▲ 오름차순</span>
+                                  <span className="text-[10px] text-neutral-400 font-normal">
+                                    {excelSortField === 'date' ? '(과거순)' : excelSortField === 'company' || excelSortField === 'partner' || excelSortField === 'title' || excelSortField === 'instructor' ? '(ㄱ→ㅎ)' : '(낮은순)'}
+                                  </span>
+                                </>
+                              )}
+                            </button>
+                          </div>
+
+                          {/* Quick Sort Shortcuts */}
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <span className="text-[10px] text-neutral-500 font-semibold shrink-0">빠른 정렬:</span>
+                            <button
+                              type="button"
+                              onClick={() => { setExcelSortField('date'); setExcelSortDirection('desc'); setExcelPage(1); }}
+                              className={`px-2.5 py-1 rounded-lg text-[10px] font-bold cursor-pointer transition-all ${
+                                excelSortField === 'date' && excelSortDirection === 'desc'
+                                  ? 'bg-emerald-600 text-white shadow-sm ring-1 ring-emerald-400'
+                                  : 'bg-neutral-900 text-neutral-400 hover:text-white border border-neutral-800'
+                              }`}
+                            >
+                              📅 날짜 최신순 (기본)
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => { setExcelSortField('company'); setExcelSortDirection('asc'); setExcelPage(1); }}
+                              className={`px-2.5 py-1 rounded-lg text-[10px] font-bold cursor-pointer transition-all ${
+                                excelSortField === 'company' && excelSortDirection === 'asc'
+                                  ? 'bg-emerald-600 text-white shadow-sm ring-1 ring-emerald-400'
+                                  : 'bg-neutral-900 text-neutral-400 hover:text-white border border-neutral-800'
+                              }`}
+                            >
+                              🏢 기관명 가나다순
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => { setExcelSortField('attendees'); setExcelSortDirection('desc'); setExcelPage(1); }}
+                              className={`px-2.5 py-1 rounded-lg text-[10px] font-bold cursor-pointer transition-all ${
+                                excelSortField === 'attendees' && excelSortDirection === 'desc'
+                                  ? 'bg-emerald-600 text-white shadow-sm ring-1 ring-emerald-400'
+                                  : 'bg-neutral-900 text-neutral-400 hover:text-white border border-neutral-800'
+                              }`}
+                            >
+                              👥 인원 많은순
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => { setExcelSortField('budget'); setExcelSortDirection('desc'); setExcelPage(1); }}
+                              className={`px-2.5 py-1 rounded-lg text-[10px] font-bold cursor-pointer transition-all ${
+                                excelSortField === 'budget' && excelSortDirection === 'desc'
+                                  ? 'bg-emerald-600 text-white shadow-sm ring-1 ring-emerald-400'
+                                  : 'bg-neutral-900 text-neutral-400 hover:text-white border border-neutral-800'
+                              }`}
+                            >
+                              💰 예산 높은순
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => { setExcelSortField('rating'); setExcelSortDirection('desc'); setExcelPage(1); }}
+                              className={`px-2.5 py-1 rounded-lg text-[10px] font-bold cursor-pointer transition-all ${
+                                excelSortField === 'rating' && excelSortDirection === 'desc'
+                                  ? 'bg-emerald-600 text-white shadow-sm ring-1 ring-emerald-400'
+                                  : 'bg-neutral-900 text-neutral-400 hover:text-white border border-neutral-800'
+                              }`}
+                            >
+                              ⭐ 평점 높은순
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => { setExcelSortField('date'); setExcelSortDirection('desc'); setExcelPage(1); }}
+                              className="px-2 py-1 rounded-lg text-[10px] font-semibold text-neutral-500 hover:text-neutral-300 hover:bg-neutral-850 cursor-pointer transition-colors"
+                              title="장부 기본 정렬(날짜 내림차순)로 리셋합니다."
+                            >
+                              ↺ 기본 리셋
+                            </button>
+                          </div>
+                        </div>
+
                         {sorted.length > 0 ? (
                           <div className="overflow-x-auto rounded-xl border border-neutral-800">
                             <table className="w-full border-collapse text-[10px] text-neutral-300 font-mono">
@@ -5880,36 +6082,232 @@ export default function App() {
                                   <th className="p-1.5 border-r border-neutral-800 text-neutral-500 text-center uppercase font-bold w-32">C</th>
                                   <th className="p-1.5 border-r border-neutral-800 text-neutral-500 text-center uppercase font-bold w-28">D</th>
                                   <th className="p-1.5 border-r border-neutral-800 text-neutral-500 text-center uppercase font-bold min-w-[150px]">E</th>
-                                  <th className="p-1.5 border-r border-neutral-800 text-neutral-500 text-center uppercase font-bold w-32">F</th>
+                                  <th className="p-1.5 border-r border-neutral-800 text-neutral-500 text-center uppercase font-bold w-20">F</th>
                                   <th className="p-1.5 border-r border-neutral-800 text-neutral-500 text-center uppercase font-bold w-20">G</th>
-                                  <th className="p-1.5 border-r border-neutral-800 text-neutral-500 text-center uppercase font-bold w-20">H</th>
-                                  <th className="p-1.5 border-r border-neutral-800 text-neutral-500 text-center uppercase font-bold w-16">I</th>
+                                  <th className="p-1.5 border-r border-neutral-800 text-neutral-500 text-center uppercase font-bold w-28">H</th>
+                                  <th className="p-1.5 border-r border-neutral-800 text-neutral-500 text-center uppercase font-bold w-20">I</th>
                                   <th className="p-1.5 border-r border-neutral-800 text-neutral-500 text-center uppercase font-bold w-16">J</th>
-                                  <th className="p-1.5 border-r border-neutral-800 text-neutral-500 text-center uppercase font-bold w-20">K</th>
+                                  <th className="p-1.5 border-r border-neutral-800 text-neutral-500 text-center uppercase font-bold w-16">K</th>
                                   <th className="p-1.5 border-r border-neutral-800 text-neutral-500 text-center uppercase font-bold w-20">L</th>
-                                  <th className="p-1.5 border-r border-neutral-800 text-neutral-500 text-center uppercase font-bold w-24">M</th>
-                                  <th className="p-1.5 border-r border-neutral-800 text-neutral-500 text-center uppercase font-bold w-16">N</th>
-                                  <th className="p-1.5 border-r border-neutral-800 text-neutral-500 text-center uppercase font-bold w-24">O</th>
-                                  <th className="p-1.5 text-neutral-500 text-center uppercase font-bold w-24">P</th>
+                                  <th className="p-1.5 border-r border-neutral-800 text-neutral-500 text-center uppercase font-bold w-20">M</th>
+                                  <th className="p-1.5 border-r border-neutral-800 text-neutral-500 text-center uppercase font-bold w-24">N</th>
+                                  <th className="p-1.5 border-r border-neutral-800 text-neutral-500 text-center uppercase font-bold w-16">O</th>
+                                  <th className="p-1.5 border-r border-neutral-800 text-neutral-500 text-center uppercase font-bold w-24">P</th>
+                                  <th className="p-1.5 text-neutral-500 text-center uppercase font-bold w-24">Q</th>
                                 </tr>
                                 <tr className="bg-neutral-900 border-b border-neutral-800 text-neutral-400 font-sans">
                                   <th className="p-1.5 border-r border-neutral-800 text-center text-[9px] select-none text-neutral-600 font-bold">#</th>
                                   <th className="p-1.5 border-r border-neutral-800 text-center font-bold">순번</th>
-                                  <th className="p-1.5 border-r border-neutral-800 text-center font-bold">출강일자</th>
-                                  <th className="p-1.5 border-r border-neutral-800 text-left font-bold pl-3">의뢰 기업명</th>
-                                  <th className="p-1.5 border-r border-neutral-800 text-left font-bold pl-3">지정 협력사</th>
-                                  <th className="p-1.5 border-r border-neutral-800 text-left font-bold pl-3">출강 교육 명칭</th>
-                                  <th className="p-1.5 border-r border-neutral-800 text-center font-bold">지원자격</th>
-                                  <th className="p-1.5 border-r border-neutral-800 text-center font-bold">배정 주강사</th>
+                                  <th 
+                                    onClick={() => toggleExcelSort('date')}
+                                    className={`p-1.5 border-r border-neutral-800 text-center font-bold cursor-pointer select-none transition-colors group ${
+                                      excelSortField === 'date' ? 'bg-emerald-950/60 text-emerald-400 font-black ring-1 ring-inset ring-emerald-500/40' : 'hover:bg-neutral-850 hover:text-white'
+                                    }`}
+                                    title="클릭 시 출강일자(날짜) 정렬 전환"
+                                  >
+                                    <div className="inline-flex items-center justify-center gap-1 w-full">
+                                      <span>출강일자</span>
+                                      {excelSortField === 'date' ? (
+                                        <span className="text-[11px] text-emerald-400 font-black">{excelSortDirection === 'desc' ? '▼' : '▲'}</span>
+                                      ) : (
+                                        <span className="text-[9px] text-neutral-600 opacity-0 group-hover:opacity-100 transition-opacity">↕</span>
+                                      )}
+                                    </div>
+                                  </th>
+                                  <th 
+                                    onClick={() => toggleExcelSort('company')}
+                                    className={`p-1.5 border-r border-neutral-800 text-left font-bold pl-3 cursor-pointer select-none transition-colors group ${
+                                      excelSortField === 'company' ? 'bg-emerald-950/60 text-emerald-400 font-black ring-1 ring-inset ring-emerald-500/40' : 'hover:bg-neutral-850 hover:text-white'
+                                    }`}
+                                    title="클릭 시 의뢰 기업명(기관명) 정렬 전환"
+                                  >
+                                    <div className="inline-flex items-center justify-start gap-1 w-full">
+                                      <span>의뢰 기업명</span>
+                                      {excelSortField === 'company' ? (
+                                        <span className="text-[11px] text-emerald-400 font-black">{excelSortDirection === 'desc' ? '▼' : '▲'}</span>
+                                      ) : (
+                                        <span className="text-[9px] text-neutral-600 opacity-0 group-hover:opacity-100 transition-opacity">↕</span>
+                                      )}
+                                    </div>
+                                  </th>
+                                  <th 
+                                    onClick={() => toggleExcelSort('partner')}
+                                    className={`p-1.5 border-r border-neutral-800 text-left font-bold pl-3 cursor-pointer select-none transition-colors group ${
+                                      excelSortField === 'partner' ? 'bg-emerald-950/60 text-emerald-400 font-black ring-1 ring-inset ring-emerald-500/40' : 'hover:bg-neutral-850 hover:text-white'
+                                    }`}
+                                    title="클릭 시 지정 협력사 정렬 전환"
+                                  >
+                                    <div className="inline-flex items-center justify-start gap-1 w-full">
+                                      <span>지정 협력사</span>
+                                      {excelSortField === 'partner' ? (
+                                        <span className="text-[11px] text-emerald-400 font-black">{excelSortDirection === 'desc' ? '▼' : '▲'}</span>
+                                      ) : (
+                                        <span className="text-[9px] text-neutral-600 opacity-0 group-hover:opacity-100 transition-opacity">↕</span>
+                                      )}
+                                    </div>
+                                  </th>
+                                  <th 
+                                    onClick={() => toggleExcelSort('title')}
+                                    className={`p-1.5 border-r border-neutral-800 text-left font-bold pl-3 cursor-pointer select-none transition-colors group ${
+                                      excelSortField === 'title' ? 'bg-emerald-950/60 text-emerald-400 font-black ring-1 ring-inset ring-emerald-500/40' : 'hover:bg-neutral-850 hover:text-white'
+                                    }`}
+                                    title="클릭 시 출강 교육 명칭 정렬 전환"
+                                  >
+                                    <div className="inline-flex items-center justify-start gap-1 w-full">
+                                      <span>출강 교육 명칭</span>
+                                      {excelSortField === 'title' ? (
+                                        <span className="text-[11px] text-emerald-400 font-black">{excelSortDirection === 'desc' ? '▼' : '▲'}</span>
+                                      ) : (
+                                        <span className="text-[9px] text-neutral-600 opacity-0 group-hover:opacity-100 transition-opacity">↕</span>
+                                      )}
+                                    </div>
+                                  </th>
+                                  <th 
+                                    onClick={() => toggleExcelSort('tier')}
+                                    className={`p-1.5 border-r border-neutral-800 text-center font-bold cursor-pointer select-none transition-colors group ${
+                                      excelSortField === 'tier' ? 'bg-emerald-950/60 text-emerald-400 font-black ring-1 ring-inset ring-emerald-500/40' : 'hover:bg-neutral-850 hover:text-white'
+                                    }`}
+                                    title="클릭 시 지원자격 등급 정렬 전환"
+                                  >
+                                    <div className="inline-flex items-center justify-center gap-1 w-full">
+                                      <span>지원자격</span>
+                                      {excelSortField === 'tier' ? (
+                                        <span className="text-[11px] text-emerald-400 font-black">{excelSortDirection === 'desc' ? '▼' : '▲'}</span>
+                                      ) : (
+                                        <span className="text-[9px] text-neutral-600 opacity-0 group-hover:opacity-100 transition-opacity">↕</span>
+                                      )}
+                                    </div>
+                                  </th>
+                                  <th 
+                                    onClick={() => toggleExcelSort('instructor')}
+                                    className={`p-1.5 border-r border-neutral-800 text-center font-bold cursor-pointer select-none transition-colors group ${
+                                      excelSortField === 'instructor' ? 'bg-emerald-950/60 text-emerald-400 font-black ring-1 ring-inset ring-emerald-500/40' : 'hover:bg-neutral-850 hover:text-white'
+                                    }`}
+                                    title="클릭 시 배정 주강사 정렬 전환"
+                                  >
+                                    <div className="inline-flex items-center justify-center gap-1 w-full">
+                                      <span>배정 주강사</span>
+                                      {excelSortField === 'instructor' ? (
+                                        <span className="text-[11px] text-emerald-400 font-black">{excelSortDirection === 'desc' ? '▼' : '▲'}</span>
+                                      ) : (
+                                        <span className="text-[9px] text-neutral-600 opacity-0 group-hover:opacity-100 transition-opacity">↕</span>
+                                      )}
+                                    </div>
+                                  </th>
                                   <th className="p-1.5 border-r border-neutral-800 text-center font-bold text-amber-300">주강사 계좌번호</th>
                                   <th className="p-1.5 border-r border-neutral-800 text-center font-bold">배정 보조강사</th>
-                                  <th className="p-1.5 border-r border-neutral-800 text-center font-bold">강의 시간</th>
-                                  <th className="p-1.5 border-r border-neutral-800 text-center font-bold">예정 인원</th>
-                                  <th className="p-1.5 border-r border-neutral-800 text-right font-bold pr-3">인당 재료비</th>
-                                  <th className="p-1.5 border-r border-neutral-800 text-right font-bold pr-3">로열티(M)</th>
-                                  <th className="p-1.5 border-r border-neutral-800 text-right font-bold pr-3">정산 총 예산</th>
-                                  <th className="p-1.5 border-r border-neutral-800 text-center font-bold">만족도 평점</th>
-                                  <th className="p-1.5 border-r border-neutral-800 text-center font-bold">출강 현황</th>
+                                  <th 
+                                    onClick={() => toggleExcelSort('mainHours')}
+                                    className={`p-1.5 border-r border-neutral-800 text-center font-bold cursor-pointer select-none transition-colors group ${
+                                      excelSortField === 'mainHours' ? 'bg-emerald-950/60 text-emerald-400 font-black ring-1 ring-inset ring-emerald-500/40' : 'hover:bg-neutral-850 hover:text-white'
+                                    }`}
+                                    title="클릭 시 강의 시간 정렬 전환"
+                                  >
+                                    <div className="inline-flex items-center justify-center gap-1 w-full">
+                                      <span>강의 시간</span>
+                                      {excelSortField === 'mainHours' ? (
+                                        <span className="text-[11px] text-emerald-400 font-black">{excelSortDirection === 'desc' ? '▼' : '▲'}</span>
+                                      ) : (
+                                        <span className="text-[9px] text-neutral-600 opacity-0 group-hover:opacity-100 transition-opacity">↕</span>
+                                      )}
+                                    </div>
+                                  </th>
+                                  <th 
+                                    onClick={() => toggleExcelSort('attendees')}
+                                    className={`p-1.5 border-r border-neutral-800 text-center font-bold cursor-pointer select-none transition-colors group ${
+                                      excelSortField === 'attendees' ? 'bg-emerald-950/60 text-emerald-400 font-black ring-1 ring-inset ring-emerald-500/40' : 'hover:bg-neutral-850 hover:text-white'
+                                    }`}
+                                    title="클릭 시 예정 인원(명) 정렬 전환"
+                                  >
+                                    <div className="inline-flex items-center justify-center gap-1 w-full">
+                                      <span>예정 인원</span>
+                                      {excelSortField === 'attendees' ? (
+                                        <span className="text-[11px] text-emerald-400 font-black">{excelSortDirection === 'desc' ? '▼' : '▲'}</span>
+                                      ) : (
+                                        <span className="text-[9px] text-neutral-600 opacity-0 group-hover:opacity-100 transition-opacity">↕</span>
+                                      )}
+                                    </div>
+                                  </th>
+                                  <th 
+                                    onClick={() => toggleExcelSort('materialCost')}
+                                    className={`p-1.5 border-r border-neutral-800 text-right font-bold pr-3 cursor-pointer select-none transition-colors group ${
+                                      excelSortField === 'materialCost' ? 'bg-emerald-950/60 text-emerald-400 font-black ring-1 ring-inset ring-emerald-500/40' : 'hover:bg-neutral-850 hover:text-white'
+                                    }`}
+                                    title="클릭 시 인당 재료비 정렬 전환"
+                                  >
+                                    <div className="inline-flex items-center justify-end gap-1 w-full">
+                                      <span>인당 재료비</span>
+                                      {excelSortField === 'materialCost' ? (
+                                        <span className="text-[11px] text-emerald-400 font-black">{excelSortDirection === 'desc' ? '▼' : '▲'}</span>
+                                      ) : (
+                                        <span className="text-[9px] text-neutral-600 opacity-0 group-hover:opacity-100 transition-opacity">↕</span>
+                                      )}
+                                    </div>
+                                  </th>
+                                  <th 
+                                    onClick={() => toggleExcelSort('royalty')}
+                                    className={`p-1.5 border-r border-neutral-800 text-right font-bold pr-3 cursor-pointer select-none transition-colors group ${
+                                      excelSortField === 'royalty' ? 'bg-emerald-950/60 text-emerald-400 font-black ring-1 ring-inset ring-emerald-500/40' : 'hover:bg-neutral-850 hover:text-white'
+                                    }`}
+                                    title="클릭 시 로열티 정렬 전환"
+                                  >
+                                    <div className="inline-flex items-center justify-end gap-1 w-full">
+                                      <span>로열티(M)</span>
+                                      {excelSortField === 'royalty' ? (
+                                        <span className="text-[11px] text-emerald-400 font-black">{excelSortDirection === 'desc' ? '▼' : '▲'}</span>
+                                      ) : (
+                                        <span className="text-[9px] text-neutral-600 opacity-0 group-hover:opacity-100 transition-opacity">↕</span>
+                                      )}
+                                    </div>
+                                  </th>
+                                  <th 
+                                    onClick={() => toggleExcelSort('budget')}
+                                    className={`p-1.5 border-r border-neutral-800 text-right font-bold pr-3 cursor-pointer select-none transition-colors group ${
+                                      excelSortField === 'budget' ? 'bg-emerald-950/60 text-emerald-400 font-black ring-1 ring-inset ring-emerald-500/40' : 'hover:bg-neutral-850 hover:text-white'
+                                    }`}
+                                    title="클릭 시 정산 총 예산 정렬 전환"
+                                  >
+                                    <div className="inline-flex items-center justify-end gap-1 w-full">
+                                      <span>정산 총 예산</span>
+                                      {excelSortField === 'budget' ? (
+                                        <span className="text-[11px] text-emerald-400 font-black">{excelSortDirection === 'desc' ? '▼' : '▲'}</span>
+                                      ) : (
+                                        <span className="text-[9px] text-neutral-600 opacity-0 group-hover:opacity-100 transition-opacity">↕</span>
+                                      )}
+                                    </div>
+                                  </th>
+                                  <th 
+                                    onClick={() => toggleExcelSort('rating')}
+                                    className={`p-1.5 border-r border-neutral-800 text-center font-bold cursor-pointer select-none transition-colors group ${
+                                      excelSortField === 'rating' ? 'bg-emerald-950/60 text-emerald-400 font-black ring-1 ring-inset ring-emerald-500/40' : 'hover:bg-neutral-850 hover:text-white'
+                                    }`}
+                                    title="클릭 시 만족도 평점 정렬 전환"
+                                  >
+                                    <div className="inline-flex items-center justify-center gap-1 w-full">
+                                      <span>만족도 평점</span>
+                                      {excelSortField === 'rating' ? (
+                                        <span className="text-[11px] text-emerald-400 font-black">{excelSortDirection === 'desc' ? '▼' : '▲'}</span>
+                                      ) : (
+                                        <span className="text-[9px] text-neutral-600 opacity-0 group-hover:opacity-100 transition-opacity">↕</span>
+                                      )}
+                                    </div>
+                                  </th>
+                                  <th 
+                                    onClick={() => toggleExcelSort('status')}
+                                    className={`p-1.5 border-r border-neutral-800 text-center font-bold cursor-pointer select-none transition-colors group ${
+                                      excelSortField === 'status' ? 'bg-emerald-950/60 text-emerald-400 font-black ring-1 ring-inset ring-emerald-500/40' : 'hover:bg-neutral-850 hover:text-white'
+                                    }`}
+                                    title="클릭 시 출강/정산 현황 정렬 전환"
+                                  >
+                                    <div className="inline-flex items-center justify-center gap-1 w-full">
+                                      <span>출강 현황</span>
+                                      {excelSortField === 'status' ? (
+                                        <span className="text-[11px] text-emerald-400 font-black">{excelSortDirection === 'desc' ? '▼' : '▲'}</span>
+                                      ) : (
+                                        <span className="text-[9px] text-neutral-600 opacity-0 group-hover:opacity-100 transition-opacity">↕</span>
+                                      )}
+                                    </div>
+                                  </th>
                                   <th className="p-1.5 text-center font-bold">예정 정산일 (익월 말일)</th>
                                 </tr>
                               </thead>
@@ -6124,6 +6522,15 @@ export default function App() {
                         <p className="text-[10px] text-neutral-500 mt-0.5">상호 평가 및 정량 실적 기반 자동 등급 조정과 정회원 직권 승인을 관리합니다.</p>
                       </div>
                       <div className="flex items-center gap-2 shrink-0">
+                        <button
+                          type="button"
+                          onClick={handleResetInstructors}
+                          className="px-3.5 py-1.5 rounded-lg bg-neutral-800 hover:bg-red-950/70 border border-neutral-700 hover:border-red-500/60 text-neutral-300 hover:text-red-300 font-extrabold text-xs flex items-center gap-1.5 transition-all cursor-pointer shadow-md hover:scale-[1.01]"
+                          title="소속 강사 리스트를 기본 상태로 초기화합니다."
+                        >
+                          <RefreshCw className="w-3.5 h-3.5 text-red-400" />
+                          <span>강사 리스트 초기화</span>
+                        </button>
                         <button
                           type="button"
                           onClick={handleDirectSyncInstructors}

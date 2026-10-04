@@ -6,7 +6,22 @@ service cloud.firestore {
       allow write: if !lectureId.matches('^lect_hist_.*') && !lectureId.matches('^lect_open_.*');
       allow read: if true;
     }
-    match /{document=**} {
+    match /users/{userId} {
+      // Reject mock instructors from stale client tabs, but permit deletion
+      allow delete: if true;
+      allow create, update: if !userId.matches('^user_(gu_gyojun|choi_wonseok|kang_taeyang|park_junhyuk|lee_soyeon|jung_woosung|kim_minjae|han_jieun|yoon_seojun|song_minji|cho_hyunwoo|kim_dohyun)$');
+      allow read: if true;
+    }
+    match /programs/{programId} {
+      allow read, write: if true;
+    }
+    match /proposals/{proposalId} {
+      allow read, write: if true;
+    }
+    match /transactions/{transactionId} {
+      allow read, write: if true;
+    }
+    match /metadata/{metaId} {
       allow read, write: if true;
     }
   }
