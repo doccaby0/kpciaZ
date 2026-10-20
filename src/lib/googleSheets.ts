@@ -258,8 +258,8 @@ export class GoogleSheetsService {
 
   static getAvailableYears(lectures: LectureRequest[]): string[] {
     const yearsSet = new Set<string>();
-    for (const l of lectures) {
-      if (l.date) {
+    for (const l of (lectures || [])) {
+      if (l && l.date && typeof l.date === 'string') {
         const y = l.date.split('-')[0];
         if (y && y.length === 4) {
           yearsSet.add(y);

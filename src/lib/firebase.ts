@@ -288,17 +288,17 @@ export class StorageService {
       'user_yoon_seojun', 'user_song_minji', 'user_cho_hyunwoo', 'user_kim_dohyun'
     ]);
     let rawList = this.getLocal<UserProfile[]>('users', INITIAL_USERS);
-    rawList = (rawList || []).filter(u => !mockUserIds.has(u.uid));
+    rawList = (Array.isArray(rawList) ? rawList : []).filter(u => u && typeof u.uid === 'string' && !mockUserIds.has(u.uid));
     if (rawList.length === 0) {
       rawList = INITIAL_USERS;
     }
-    const rawIds = new Set(rawList.map(u => u.uid));
-    const missing = INITIAL_USERS.filter(u => !rawIds.has(u.uid));
+    const rawIds = new Set(rawList.filter(u => u && u.uid).map(u => u.uid));
+    const missing = INITIAL_USERS.filter(u => u && u.uid && !rawIds.has(u.uid));
     if (missing.length > 0) {
       rawList = [...rawList, ...missing];
     }
     this.setLocal('users', rawList);
-    return rawList.map(u => ({
+    return rawList.filter(u => u && u.uid).map(u => ({
       ...u,
       isApproved: u.isApproved !== undefined ? u.isApproved : true,
       emailVerified: u.emailVerified !== undefined ? u.emailVerified : true,
@@ -331,17 +331,17 @@ export class StorageService {
   static getLocalLectures(): LectureRequest[] {
     let raw = this.getLocal<LectureRequest[]>('lectures', INITIAL_LECTURES);
     // Filter out obsolete legacy mock ids or deleted lectures if any
-    raw = (raw || []).filter(l => !l.id.startsWith('lect_hist_') && !(l as any).isDeleted && (l as any).status !== 'deleted');
+    raw = (Array.isArray(raw) ? raw : []).filter(l => l && typeof l.id === 'string' && !l.id.startsWith('lect_hist_') && !(l as any).isDeleted && (l as any).status !== 'deleted');
     if (!raw || raw.length === 0) {
       raw = INITIAL_LECTURES;
     }
-    const rawIds = new Set(raw.map(l => l.id));
-    const missing = INITIAL_LECTURES.filter(l => !rawIds.has(l.id));
+    const rawIds = new Set(raw.filter(l => l && l.id).map(l => l.id));
+    const missing = INITIAL_LECTURES.filter(l => l && l.id && !rawIds.has(l.id));
     if (missing.length > 0) {
       raw = [...raw, ...missing];
     }
     this.setLocal('lectures', raw);
-    return raw.map(l => ({
+    return raw.filter(l => l && l.id).map(l => ({
       ...l,
       applicants: Array.isArray(l.applicants) ? l.applicants : []
     }));
@@ -349,18 +349,20 @@ export class StorageService {
 
   static getLocalPrograms(): EducationalProgram[] {
     const rawList = this.getLocal<EducationalProgram[]>('programs', INITIAL_PROGRAMS);
-    return rawList.map(p => ({
+    return (Array.isArray(rawList) ? rawList : []).filter(p => p && p.id).map(p => ({
       ...p,
       isApproved: p.isApproved !== undefined ? p.isApproved : true
     }));
   }
 
   static getLocalTransactions(): MileageTransaction[] {
-    return this.getLocal<MileageTransaction[]>('transactions', INITIAL_TRANSACTIONS);
+    const rawList = this.getLocal<MileageTransaction[]>('transactions', INITIAL_TRANSACTIONS);
+    return (Array.isArray(rawList) ? rawList : []).filter(t => t && t.id);
   }
 
   static getLocalProposals(): PartnershipProposal[] {
-    return this.getLocal<PartnershipProposal[]>('proposals', INITIAL_PROPOSALS);
+    const rawList = this.getLocal<PartnershipProposal[]>('proposals', INITIAL_PROPOSALS);
+    return (Array.isArray(rawList) ? rawList : []).filter(p => p && p.id);
   }
 
   // Robust helper to execute Firestore operations with a fast timeout fallback
@@ -721,7 +723,8 @@ export class StorageService {
       const list: LectureRequest[] = [];
       snap.forEach(d => {
         const data = d.data() as LectureRequest;
-        if (d.id.startsWith('lect_hist_') || (data as any).isDeleted || (data as any).status === 'deleted') {
+        const docId = d.id;
+        if (!data || !docId || (typeof docId === 'string' && docId.startsWith('lect_hist_')) || (data as any)?.isDeleted || (data as any)?.status === 'deleted') {
           // Ignore legacy mock or deleted lectures
         } else {
           list.push(data);
@@ -729,11 +732,11 @@ export class StorageService {
       });
       
       // Ensure all initial seed lectures are preserved if missing from cloud
-      const listIds = new Set(list.map(l => l.id));
-      const missing = INITIAL_LECTURES.filter(l => !listIds.has(l.id));
+      const listIds = new Set(list.filter(l => l && l.id).map(l => l.id));
+      const missing = INITIAL_LECTURES.filter(l => l && l.id && !listIds.has(l.id));
       const combined = missing.length > 0 ? [...list, ...missing] : list;
       
-      const formatted = combined.map(l => ({
+      const formatted = combined.filter(l => l && l.id).map(l => ({
         ...l,
         applicants: Array.isArray(l.applicants) ? l.applicants : []
       }));
@@ -835,11 +838,11 @@ export class StorageService {
       const transactionsSnap = await getDocs(collection(db, 'transactions'));
       const proposalsSnap = await getDocs(collection(db, 'proposals'));
 
-      const cloudUsers = usersSnap.docs.map(d => d.data() as UserProfile);
-      const cloudLectures = lecturesSnap.docs.map(d => d.data() as LectureRequest);
-      const cloudPrograms = programsSnap.docs.map(d => d.data() as EducationalProgram);
-      const cloudTransactions = transactionsSnap.docs.map(d => d.data() as MileageTransaction);
-      const cloudProposals = proposalsSnap.docs.map(d => d.data() as PartnershipProposal);
+      const cloudUsers = usersSnap.docs.map(d => d.data() as UserProfile).filter(u => u && u.uid);
+      const cloudLectures = lecturesSnap.docs.map(d => d.data() as LectureRequest).filter(l => l && l.id);
+      const cloudPrograms = programsSnap.docs.map(d => d.data() as EducationalProgram).filter(p => p && p.id);
+      const cloudTransactions = transactionsSnap.docs.map(d => d.data() as MileageTransaction).filter(t => t && t.id);
+      const cloudProposals = proposalsSnap.docs.map(d => d.data() as PartnershipProposal).filter(p => p && p.id);
 
       // 2. Fetch all local cache items
       const localUsers = this.getLocalUsers();
@@ -861,8 +864,8 @@ export class StorageService {
         getId: (item: T) => string,
         colName: string
       ) => {
-        const localMap = new Map(localList.map(item => [getId(item), item]));
-        const cloudMap = new Map(cloudList.map(item => [getId(item), item]));
+        const localMap = new Map((localList || []).filter(item => item && getId(item)).map(item => [getId(item), item]));
+        const cloudMap = new Map((cloudList || []).filter(item => item && getId(item)).map(item => [getId(item), item]));
 
         const allIds = new Set([...localMap.keys(), ...cloudMap.keys()]);
         const mergedList: T[] = [];
@@ -874,10 +877,11 @@ export class StorageService {
         ]) : null;
 
         for (const id of allIds) {
+          if (!id || typeof id !== 'string') continue;
           let localItem = localMap.get(id);
           let cloudItem = cloudMap.get(id);
 
-          if (colName === 'lectures' && (id.startsWith('lect_hist_') || (localItem as any)?.isDeleted || (cloudItem as any)?.isDeleted || (localItem as any)?.status === 'deleted' || (cloudItem as any)?.status === 'deleted')) {
+          if (colName === 'lectures' && ((typeof id === 'string' && id.startsWith('lect_hist_')) || (localItem as any)?.isDeleted || (cloudItem as any)?.isDeleted || (localItem as any)?.status === 'deleted' || (cloudItem as any)?.status === 'deleted')) {
             continue;
           }
           if (mockUserIds && mockUserIds.has(id)) {
@@ -887,14 +891,14 @@ export class StorageService {
 
           // Enrich lectures with companyName if missing for historical items
           if (colName === 'lectures') {
-            const initialMap = new Map(INITIAL_LECTURES.map(l => [l.id, l]));
-            if (localItem && id.startsWith('lect_hist_') && (!(localItem as any).companyName || !(localItem as any).companyName.trim())) {
+            const initialMap = new Map(INITIAL_LECTURES.filter(l => l && l.id).map(l => [l.id, l]));
+            if (localItem && typeof id === 'string' && id.startsWith('lect_hist_') && (!(localItem as any).companyName || !(localItem as any).companyName.trim())) {
               const init = initialMap.get(id);
               if (init) {
                 localItem = { ...localItem, companyName: init.companyName };
               }
             }
-            if (cloudItem && id.startsWith('lect_hist_') && (!(cloudItem as any).companyName || !(cloudItem as any).companyName.trim())) {
+            if (cloudItem && typeof id === 'string' && id.startsWith('lect_hist_') && (!(cloudItem as any).companyName || !(cloudItem as any).companyName.trim())) {
               const init = initialMap.get(id);
               if (init) {
                 cloudItem = { ...cloudItem, companyName: init.companyName };

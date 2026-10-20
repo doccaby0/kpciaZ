@@ -8122,7 +8122,7 @@ export default function App() {
       {showGoogleSyncModal && (() => {
         const availableYears = GoogleSheetsService.getAvailableYears(lectures);
         const targetLectures = googleSyncMode === 'single_year' 
-          ? lectures.filter(l => l.date && l.date.startsWith(googleSyncSelectedYear))
+          ? lectures.filter(l => l && l.date && typeof l.date === 'string' && l.date.startsWith(googleSyncSelectedYear))
           : lectures;
 
         const lecturesCount = googleSyncIncludeLectures ? targetLectures.length : 0;
@@ -8350,7 +8350,7 @@ export default function App() {
                           <div className="pt-1.5 flex flex-wrap gap-1.5 items-center">
                             <span className="text-[10px] text-neutral-400 font-semibold mr-1">연도 선택:</span>
                             {availableYears.map(y => {
-                              const cnt = lectures.filter(l => l.date && l.date.startsWith(y)).length;
+                              const cnt = lectures.filter(l => l && l.date && typeof l.date === 'string' && l.date.startsWith(y)).length;
                               const isSelected = googleSyncSelectedYear === y;
                               return (
                                 <button
