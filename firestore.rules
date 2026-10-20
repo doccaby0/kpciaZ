@@ -2,8 +2,9 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
     match /lectures/{lectureId} {
-      // Reject legacy lecture IDs from stale client tabs
-      allow write: if !lectureId.matches('^lect_hist_.*') && !lectureId.matches('^lect_open_.*');
+      // Allow create and update of valid lectures, but block deleteDoc so stale client tabs cannot delete newly added lectures
+      allow create, update: if !lectureId.matches('^lect_hist_.*') && !lectureId.matches('^lect_open_.*');
+      allow delete: if false;
       allow read: if true;
     }
     match /users/{userId} {

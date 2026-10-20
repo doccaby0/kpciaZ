@@ -329,11 +329,10 @@ export class StorageService {
   }
 
   static getLocalLectures(): LectureRequest[] {
-    const validIds = new Set(INITIAL_LECTURES.map(l => l.id));
     let raw = this.getLocal<LectureRequest[]>('lectures', INITIAL_LECTURES);
-    // Filter out legacy lectures not in current INITIAL_LECTURES
-    raw = (raw || []).filter(l => validIds.has(l.id));
-    if (raw.length === 0) {
+    // Filter out obsolete legacy mock ids or deleted lectures if any
+    raw = (raw || []).filter(l => !l.id.startsWith('lect_hist_') && !(l as any).isDeleted && (l as any).status !== 'deleted');
+    if (!raw || raw.length === 0) {
       raw = INITIAL_LECTURES;
     }
     const rawIds = new Set(raw.map(l => l.id));
@@ -563,7 +562,7 @@ export class StorageService {
     this.setLocal('lectures', updated);
 
     await this.runWithTimeout(async () => {
-      await deleteDoc(doc(db, 'lectures', lectureId));
+      await setDoc(doc(db, 'lectures', lectureId), { isDeleted: true, status: 'deleted' }, { merge: true });
     }, null);
   }
 
@@ -718,25 +717,21 @@ export class StorageService {
 
   static subscribeLectures(callback: (lectures: LectureRequest[]) => void): () => void {
     if (!useFirestore || !db) return () => {};
-    const validIds = new Set(INITIAL_LECTURES.map(l => l.id));
     return onSnapshot(collection(db, 'lectures'), (snap) => {
       const list: LectureRequest[] = [];
       snap.forEach(d => {
-        if (validIds.has(d.id)) {
-          list.push(d.data() as LectureRequest);
+        const data = d.data() as LectureRequest;
+        if (d.id.startsWith('lect_hist_') || (data as any).isDeleted || (data as any).status === 'deleted') {
+          // Ignore legacy mock or deleted lectures
         } else {
-          deleteDoc(doc(db, 'lectures', d.id)).catch(() => {});
+          list.push(data);
         }
       });
       
-      // Ensure all 187 INITIAL_LECTURES are preserved if missing from cloud
+      // Ensure all initial seed lectures are preserved if missing from cloud
       const listIds = new Set(list.map(l => l.id));
       const missing = INITIAL_LECTURES.filter(l => !listIds.has(l.id));
       const combined = missing.length > 0 ? [...list, ...missing] : list;
-      
-      // Sort in order of original index
-      const idOrder = new Map(INITIAL_LECTURES.map((l, idx) => [l.id, idx]));
-      combined.sort((a, b) => (idOrder.get(a.id) ?? 9999) - (idOrder.get(b.id) ?? 9999));
       
       const formatted = combined.map(l => ({
         ...l,
@@ -872,7 +867,6 @@ export class StorageService {
         const allIds = new Set([...localMap.keys(), ...cloudMap.keys()]);
         const mergedList: T[] = [];
 
-        const validLectureIds = colName === 'lectures' ? new Set(INITIAL_LECTURES.map(l => l.id)) : null;
         const mockUserIds = colName === 'users' ? new Set([
           'user_gu_gyojun', 'user_choi_wonseok', 'user_kang_taeyang', 'user_park_junhyuk',
           'user_lee_soyeon', 'user_jung_woosung', 'user_kim_minjae', 'user_han_jieun',
@@ -880,17 +874,16 @@ export class StorageService {
         ]) : null;
 
         for (const id of allIds) {
-          if (validLectureIds && !validLectureIds.has(id)) {
-            deleteDoc(doc(db, colName, id)).catch(() => {});
+          let localItem = localMap.get(id);
+          let cloudItem = cloudMap.get(id);
+
+          if (colName === 'lectures' && (id.startsWith('lect_hist_') || (localItem as any)?.isDeleted || (cloudItem as any)?.isDeleted || (localItem as any)?.status === 'deleted' || (cloudItem as any)?.status === 'deleted')) {
             continue;
           }
           if (mockUserIds && mockUserIds.has(id)) {
             deleteDoc(doc(db, colName, id)).catch(() => {});
             continue;
           }
-
-          let localItem = localMap.get(id);
-          let cloudItem = cloudMap.get(id);
 
           // Enrich lectures with companyName if missing for historical items
           if (colName === 'lectures') {

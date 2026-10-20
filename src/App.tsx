@@ -265,7 +265,8 @@ export default function App() {
   const [controlRoomStatus, setControlRoomStatus] = useState<string>('all');
   const [controlRoomSort, setControlRoomSort] = useState<string>('recent');
   const [controlRoomPage, setControlRoomPage] = useState<number>(1);
-  const [controlRoomItemsPerPage, setControlRoomItemsPerPage] = useState<number>(2);
+  const [controlRoomItemsPerPage, setControlRoomItemsPerPage] = useState<number>(5);
+  const [recentlyCreatedLectureId, setRecentlyCreatedLectureId] = useState<string | null>('lect_1792467742989');
 
   // Excel Live Sheet States
   const [excelSearch, setExcelSearch] = useState<string>('');
@@ -412,11 +413,41 @@ export default function App() {
     });
 
     return [...filtered].sort((a, b) => {
-      if (controlRoomSort === 'date') return a.date.localeCompare(b.date);
-      if (controlRoomSort === 'budget') return b.budget - a.budget;
-      return b.createdAt ? b.createdAt.localeCompare(a.createdAt || '') : b.id.localeCompare(a.id);
+      // 1. If an item matches recentlyCreatedLectureId, ensure it stays at the very top for clear confirmation
+      if (recentlyCreatedLectureId) {
+        if (a.id === recentlyCreatedLectureId && b.id !== recentlyCreatedLectureId) return -1;
+        if (b.id === recentlyCreatedLectureId && a.id !== recentlyCreatedLectureId) return 1;
+      }
+
+      if (controlRoomSort === 'date') {
+        return (b.date || '').localeCompare(a.date || '');
+      }
+      if (controlRoomSort === 'budget') {
+        return (b.budget || 0) - (a.budget || 0);
+      }
+
+      // 'recent' (최근 등록순):
+      // A. Open status lectures (신규 출강 요청 건) always have priority over old completed lectures
+      const aIsOpen = a.status === 'open' ? 1 : 0;
+      const bIsOpen = b.status === 'open' ? 1 : 0;
+      if (bIsOpen !== aIsOpen) {
+        return bIsOpen - aIsOpen;
+      }
+
+      // B. User-created lectures (real IDs with length > 10) prioritized over initial static batch
+      const aIsUser = (a.id && a.id.length > 10) ? 1 : 0;
+      const bIsUser = (b.id && b.id.length > 10) ? 1 : 0;
+      if (bIsUser !== aIsUser) {
+        return bIsUser - aIsUser;
+      }
+
+      // C. Order by newest createdAt
+      if (a.createdAt || b.createdAt) {
+        return (b.createdAt || '').localeCompare(a.createdAt || '');
+      }
+      return (b.id || '').localeCompare(a.id || '');
     });
-  }, [lectures, controlRoomStatus, controlRoomSearch, controlRoomSort]);
+  }, [lectures, controlRoomStatus, controlRoomSearch, controlRoomSort, recentlyCreatedLectureId]);
 
   // Memoized: Excel filtered and sorted lectures
   const excelFilteredAndSortedLectures = React.useMemo(() => {
@@ -1219,7 +1250,19 @@ export default function App() {
     setLectures(updatedLectures);
     await StorageService.saveLecture(newLec);
 
-    triggerToast("📢 신규 기업 출강 요청 공고가 메인 보드에 즉시 게시되었습니다!", "success");
+    // Save for form draft recall
+    try {
+      localStorage.setItem('kpcia_last_submitted_lecture', JSON.stringify(newLec));
+    } catch (e) {}
+
+    // Synchronize control room view immediately to show the newly added lecture at position #1
+    setRecentlyCreatedLectureId(newLec.id);
+    setControlRoomStatus('all');
+    setControlRoomSort('recent');
+    setControlRoomSearch('');
+    setControlRoomPage(1);
+
+    triggerToast(`📢 [${cleanCompany}] '${cleanTitle}' 신규 출강 요청서가 정상 등록되었습니다! (목록 1번에 즉시 반영)`, "success");
 
     // Clear Form
     setNewLecTitle('');
@@ -1233,6 +1276,42 @@ export default function App() {
     setNewLecSurveyUrl('');
     setNewLecBudgetOption('auto');
     setNewLecDirectBudget(500000);
+  };
+
+  const handleRestoreLastLectureDraft = () => {
+    try {
+      const saved = localStorage.getItem('kpcia_last_submitted_lecture');
+      let parsed = saved ? JSON.parse(saved) : null;
+      if (!parsed) {
+        const found = lectures.find(l => l.id === recentlyCreatedLectureId || l.id === 'lect_1792467742989');
+        if (found) parsed = found;
+      }
+      if (!parsed) {
+        triggerToast("이전에 작성했던 출강 요청서 기록이 없습니다.", "info");
+        return;
+      }
+      setNewLecTitle(parsed.title || '');
+      setNewLecCompany(parsed.companyName || '');
+      setNewLecPartner(parsed.partnerCompany || '');
+      setNewLecDesc(parsed.description || '');
+      setNewLecLocation(parsed.location || '');
+      setNewLecManagerName(parsed.managerName || '');
+      setNewLecManagerPhone(parsed.managerPhone || '');
+      setNewLecDate(parsed.date || '2026-11-04');
+      if (parsed.time && parsed.time.includes('~')) {
+        const [s, e] = parsed.time.split('~');
+        setNewLecStartTime(s);
+        setNewLecEndTime(e);
+      }
+      if (parsed.budgetOption) setNewLecBudgetOption(parsed.budgetOption);
+      if (parsed.budget) setNewLecDirectBudget(parsed.budget);
+      if (parsed.attendees) setNewLecAttendees(parsed.attendees);
+      if (parsed.materialCost) setNewLecMaterialCost(parsed.materialCost);
+      if (parsed.targetTier) setNewLecTier(parsed.targetTier);
+      triggerToast("이전에 작성했던 출강 요청서 내용을 폼에 성공적으로 복원했습니다.", "success");
+    } catch (e) {
+      triggerToast("이전 내용을 불러오는 중 오류가 발생했습니다.", "error");
+    }
   };
 
   const handleDownloadTemplate = () => {
@@ -4809,29 +4888,39 @@ export default function App() {
                       <Plus className="w-4 h-4 text-[#D4AF37]" />
                       <span className="text-xs font-black">강의 출강 요청서</span>
                     </div>
-                    <div className="flex bg-neutral-950 p-0.5 rounded-lg border border-neutral-850">
+                    <div className="flex items-center gap-1.5">
                       <button
                         type="button"
-                        onClick={() => setLectureRegMode('single')}
-                        className={`px-2 py-0.5 rounded text-[9px] font-extrabold transition-all cursor-pointer ${
-                          lectureRegMode === 'single'
-                            ? 'bg-amber-500/10 text-[#D4AF37] border border-amber-500/20'
-                            : 'text-neutral-500 hover:text-neutral-300'
-                        }`}
+                        onClick={handleRestoreLastLectureDraft}
+                        className="px-2 py-0.5 rounded text-[8.5px] font-bold text-amber-400 bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/20 transition-all cursor-pointer flex items-center gap-1"
+                        title="이전에 작성했던 출강 요청서 입력 내용을 폼에 다시 불러옵니다"
                       >
-                        개별 등록
+                        <span>↺</span> 이전 내용 복원
                       </button>
-                      <button
-                        type="button"
-                        onClick={() => setLectureRegMode('bulk')}
-                        className={`px-2 py-0.5 rounded text-[9px] font-extrabold transition-all cursor-pointer ${
-                          lectureRegMode === 'bulk'
-                            ? 'bg-[#217346]/10 text-[#217346] border border-[#217346]/20'
-                            : 'text-neutral-500 hover:text-neutral-300'
-                        }`}
-                      >
-                        대량 등록
-                      </button>
+                      <div className="flex bg-neutral-950 p-0.5 rounded-lg border border-neutral-850">
+                        <button
+                          type="button"
+                          onClick={() => setLectureRegMode('single')}
+                          className={`px-2 py-0.5 rounded text-[9px] font-extrabold transition-all cursor-pointer ${
+                            lectureRegMode === 'single'
+                              ? 'bg-amber-500/10 text-[#D4AF37] border border-amber-500/20'
+                              : 'text-neutral-500 hover:text-neutral-300'
+                          }`}
+                        >
+                          개별 등록
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setLectureRegMode('bulk')}
+                          className={`px-2 py-0.5 rounded text-[9px] font-extrabold transition-all cursor-pointer ${
+                            lectureRegMode === 'bulk'
+                              ? 'bg-[#217346]/10 text-[#217346] border border-[#217346]/20'
+                              : 'text-neutral-500 hover:text-neutral-300'
+                          }`}
+                        >
+                          대량 등록
+                        </button>
+                      </div>
                     </div>
                   </div>
 
@@ -5394,8 +5483,8 @@ export default function App() {
                           onChange={(e) => { setControlRoomSort(e.target.value); setControlRoomPage(1); }}
                           className="w-full bg-neutral-900 border border-neutral-800 rounded-lg px-1.5 py-1 text-white text-[10.5px] focus:outline-none focus:border-[#D4AF37] cursor-pointer font-bold"
                         >
-                          <option value="recent">최근 등록순</option>
-                          <option value="date">출강 일정순</option>
+                          <option value="recent">최근 등록순 (신규 우선)</option>
+                          <option value="date">출강 일정순 (최신순)</option>
                           <option value="budget">총 예산 높은순</option>
                         </select>
                       </div>
@@ -5408,10 +5497,11 @@ export default function App() {
                           className="w-full bg-neutral-900 border border-neutral-800 rounded-lg px-1.5 py-1 text-white text-[10.5px] focus:outline-none focus:border-[#D4AF37] cursor-pointer font-bold"
                           title="한 페이지에 표시할 개수 선택"
                         >
-                          <option value={1}>페이지당 1개씩 (한화면)</option>
-                          <option value={2}>페이지당 2개씩 (추천)</option>
-                          <option value={3}>페이지당 3개씩</option>
-                          <option value={5}>페이지당 5개씩</option>
+                          <option value={5}>페이지당 5개씩 (기본)</option>
+                          <option value={10}>페이지당 10개씩</option>
+                          <option value={20}>페이지당 20개씩</option>
+                          <option value={50}>페이지당 50개씩</option>
+                          <option value={2}>페이지당 2개씩</option>
                         </select>
                       </div>
 
@@ -5455,6 +5545,53 @@ export default function App() {
                         </button>
                       </div>
                     </div>
+
+                    {/* ✨ Recently Created Lecture Status Reassurance Banner */}
+                    {(() => {
+                      const recentLec = lectures.find(l => l.id === recentlyCreatedLectureId);
+                      if (!recentLec) return null;
+                      return (
+                        <div className="p-3 rounded-xl bg-gradient-to-r from-amber-500/15 via-amber-500/10 to-transparent border border-amber-500/40 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2.5 animate-in fade-in">
+                          <div className="space-y-0.5">
+                            <div className="flex items-center gap-1.5">
+                              <span className="p-0.5 rounded bg-emerald-500/20 text-emerald-400">
+                                <CheckCircle className="w-3.5 h-3.5" />
+                              </span>
+                              <span className="text-[11px] font-black text-amber-300">
+                                📌 신규 출강 요청서가 클라우드에 안전하게 보존 중입니다 (관제실 1번 위치)
+                              </span>
+                            </div>
+                            <p className="text-[10.5px] text-neutral-300">
+                              <strong className="text-white">[{recentLec.companyName}]</strong> {recentLec.title} 
+                              <span className="text-neutral-400 ml-1.5 font-mono">
+                                (출강일자: {recentLec.date} {recentLec.time} | 총예산: ₩{recentLec.budget?.toLocaleString()}원 | {recentLec.status === 'open' ? '🔥 모집 중' : recentLec.status})
+                              </span>
+                            </p>
+                          </div>
+                          <div className="flex items-center gap-1.5 shrink-0 self-end sm:self-auto">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setControlRoomStatus('all');
+                                setControlRoomSort('recent');
+                                setControlRoomPage(1);
+                                setControlRoomSearch('');
+                              }}
+                              className="px-2.5 py-1 text-[9.5px] font-black rounded-lg bg-amber-500 text-black hover:bg-amber-400 transition-colors cursor-pointer"
+                            >
+                              1번 위치 확인
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => startEditLecture(recentLec)}
+                              className="px-2 py-1 text-[9.5px] font-bold rounded-lg bg-neutral-900 hover:bg-neutral-800 text-neutral-300 transition-colors cursor-pointer border border-neutral-750"
+                            >
+                              내용 수정
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })()}
 
                     {/* Pagination List without Mouse Scrollbar */}
                     <div className="space-y-2.5">
@@ -5505,12 +5642,26 @@ export default function App() {
                               </div>
                             </div>
                             {paginatedItems.map(lecture => {
+                              const isRecentlyCreated = lecture.id === recentlyCreatedLectureId;
                               return (
-                            <div key={lecture.id} className="p-2.5 rounded-xl bg-neutral-900/60 border border-neutral-800/80 space-y-2 text-[10.5px] hover:border-neutral-700/80 transition-colors">
+                            <div 
+                              key={lecture.id} 
+                              className={`p-3 rounded-xl border space-y-2 text-[10.5px] transition-all ${
+                                isRecentlyCreated 
+                                  ? 'bg-amber-950/25 border-amber-500/80 shadow-lg shadow-amber-500/10 ring-1 ring-amber-500/50' 
+                                  : 'bg-neutral-900/60 border-neutral-800/80 hover:border-neutral-700/80'
+                              }`}
+                            >
                               <div className="flex justify-between items-start gap-3">
                                 <div>
                                   <div className="flex items-center gap-1.5 flex-wrap">
-                                    <span className="text-[10px] text-neutral-400 font-extrabold">{lecture.companyName}</span>
+                                    {isRecentlyCreated && (
+                                      <span className="text-[8.5px] text-amber-300 font-black bg-amber-500/20 border border-amber-500/40 px-2 py-0.5 rounded-full flex items-center gap-1 shadow-sm">
+                                        <Sparkles className="w-2.5 h-2.5 text-amber-400" />
+                                        <span>방금 등록된 신규 공고</span>
+                                      </span>
+                                    )}
+                                    <span className="text-[10px] text-neutral-300 font-extrabold">{lecture.companyName}</span>
                                     {lecture.partnerCompany && (
                                       <span className="text-[9px] text-[#D4AF37] border border-[#D4AF37]/30 bg-[#D4AF37]/5 px-1 rounded font-extrabold flex items-center gap-0.5">
                                         🤝 협력사: {lecture.partnerCompany}
@@ -5888,7 +6039,7 @@ export default function App() {
                                 excelStatusFilter === 'open' ? 'bg-amber-500/15 text-amber-500 border border-amber-500/20' : 'text-neutral-500 hover:text-neutral-300'
                               }`}
                             >
-                              모집 중
+                              모집 중({lecturesStats.open})
                             </button>
                             <button
                               type="button"
