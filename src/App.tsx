@@ -1262,7 +1262,7 @@ export default function App() {
     setControlRoomSearch('');
     setControlRoomPage(1);
 
-    triggerToast(`📢 [${cleanCompany}] '${cleanTitle}' 신규 출강 요청서가 정상 등록되었습니다! (목록 1번에 즉시 반영)`, "success");
+    triggerToast(`📢 [${cleanCompany}] '${cleanTitle}' 신규 출강 요청서가 정상 등록되었습니다!`, "success");
 
     // Clear Form
     setNewLecTitle('');
@@ -5545,53 +5545,6 @@ export default function App() {
                         </button>
                       </div>
                     </div>
-
-                    {/* ✨ Recently Created Lecture Status Reassurance Banner */}
-                    {(() => {
-                      const recentLec = lectures.find(l => l.id === recentlyCreatedLectureId);
-                      if (!recentLec) return null;
-                      return (
-                        <div className="p-3 rounded-xl bg-gradient-to-r from-amber-500/15 via-amber-500/10 to-transparent border border-amber-500/40 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2.5 animate-in fade-in">
-                          <div className="space-y-0.5">
-                            <div className="flex items-center gap-1.5">
-                              <span className="p-0.5 rounded bg-emerald-500/20 text-emerald-400">
-                                <CheckCircle className="w-3.5 h-3.5" />
-                              </span>
-                              <span className="text-[11px] font-black text-amber-300">
-                                📌 신규 출강 요청서가 클라우드에 안전하게 보존 중입니다 (관제실 1번 위치)
-                              </span>
-                            </div>
-                            <p className="text-[10.5px] text-neutral-300">
-                              <strong className="text-white">[{recentLec.companyName}]</strong> {recentLec.title} 
-                              <span className="text-neutral-400 ml-1.5 font-mono">
-                                (출강일자: {recentLec.date} {recentLec.time} | 총예산: ₩{recentLec.budget?.toLocaleString()}원 | {recentLec.status === 'open' ? '🔥 모집 중' : recentLec.status})
-                              </span>
-                            </p>
-                          </div>
-                          <div className="flex items-center gap-1.5 shrink-0 self-end sm:self-auto">
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setControlRoomStatus('all');
-                                setControlRoomSort('recent');
-                                setControlRoomPage(1);
-                                setControlRoomSearch('');
-                              }}
-                              className="px-2.5 py-1 text-[9.5px] font-black rounded-lg bg-amber-500 text-black hover:bg-amber-400 transition-colors cursor-pointer"
-                            >
-                              1번 위치 확인
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => startEditLecture(recentLec)}
-                              className="px-2 py-1 text-[9.5px] font-bold rounded-lg bg-neutral-900 hover:bg-neutral-800 text-neutral-300 transition-colors cursor-pointer border border-neutral-750"
-                            >
-                              내용 수정
-                            </button>
-                          </div>
-                        </div>
-                      );
-                    })()}
 
                     {/* Pagination List without Mouse Scrollbar */}
                     <div className="space-y-2.5">
