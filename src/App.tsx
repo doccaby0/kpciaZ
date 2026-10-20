@@ -2344,7 +2344,7 @@ export default function App() {
         cell('A33:H33', '• [소속 공지] 담당자 자기소개 시 반드시 "인사이트9교육연구소 파트너 강사"로 소개합니다.', { size: 9.5, fill: 'FFFBFBFE', align: 'left' });
         cell('A34:H34', '• [사전 체크] 출강 2~3일 전 담당자와 전화 연결하여 강의 환경(마이크, PPT 사용 여부, 조별 구성 가능 여부, 주차 등등의 컨디션 체크', { size: 9.5, fill: 'FFFBFBFE', align: 'left' });
         cell('A35:H35', '• [임의 변경 불가] 현장에서 인원 임의 추가 요구 시, "협의된 전용 교구가 배정 수량만큼만 제작되었다"고 친절히 거절합니다.', { size: 9.5, fill: 'FFFBFBFE', align: 'left' });
-        cell('A36:H36', '• [SNS 후기 PR] 개인 SNS, 블로그 후기 작성 시 반드시 "인사이트9교육연구소 협업 출강" 키워드를 포함하여 기재합니다.', { size: 9.5, fill: 'FFFBFBFE', align: 'left' });
+        cell('A36:H36', '• [SNS 후기 PR] 개인 SNS, 블로그 후기 작성 시 반드시 "[강의/프로젝트]는 @insight9_edu  파트너 강사로 함께 진행되었습니다." 키워드를 포함하여 기재합니다.', { size: 9.5, fill: 'FFFBFBFE', align: 'left' });
 
         cell('A37:H37', '', { border: 'none' });
 
