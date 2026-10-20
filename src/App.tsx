@@ -2053,7 +2053,7 @@ export default function App() {
       const isMainLecturer = currentUser && lecture.assignedTo === currentUser.uid;
       const isAssistantLecturer = currentUser && lecture.assistantId === currentUser.uid;
       if (!currentUser?.isAdmin && !isMainLecturer && !isAssistantLecturer) {
-        triggerToast("🔒 KPCIA 마스터실의 승인을 거쳐 최종 배정 완료된 강사님만 상세 엑셀 다운로드가 가능합니다.", "error");
+        triggerToast("🔒 KPCIA 마스터실의 승인을 거쳐 최종 배정 완료된 강사님만 상세 강의 요청서 다운로드가 가능합니다.", "error");
         return;
       }
     }
@@ -2062,7 +2062,7 @@ export default function App() {
       try {
         const todayStr = new Date().toISOString().substring(0, 10);
         const workbook = new ExcelJS.Workbook();
-        const ws = workbook.addWorksheet('출강파견안내서');
+        const ws = workbook.addWorksheet('상세강의요청서');
         
         // Page setup for single page fit
         ws.pageSetup = {
@@ -2232,7 +2232,7 @@ export default function App() {
 
         // Write content row by row with beautiful colors
         // [Banner Area]
-        cell('A1:H1', '📋 [KPCIA] 공식 출강 강의 파견 안내서', { size: 14, bold: true, color: 'FFFFFFFF', fill: 'FF0F172A', align: 'center' });
+        cell('A1:H1', '📋 [KPCIA] 공식 상세 강의 요청서 (출강 파견 안내서)', { size: 14, bold: true, color: 'FFFFFFFF', fill: 'FF0F172A', align: 'center' });
         cell('A2:H2', '인사이트9교육연구소 × KPCIA 한국 프레스티지 기업 강사 협회', { size: 10, bold: true, color: 'FFF59E0B', fill: 'FF1E293B', align: 'center' });
         cell('A3:H3', `발행일자: ${todayStr}   |   강의 배정상태: 최종 배정 승인 완료 (Assigned)   |   안내서 고유번호: KPCIA-L-${lecture.id.substring(0, 6).toUpperCase()}`, { size: 9, color: 'FF475569', fill: 'FFF8FAFC', align: 'center' });
         cell('A4:H4', '', { border: 'none' });
@@ -2357,11 +2357,11 @@ export default function App() {
         const url = window.URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
-        a.download = `KPCIA_출강_파견안내서_${lecture.companyName || "공고"}_${lecture.id}.xlsx`;
+        a.download = `KPCIA_상세강의요청서_${lecture.companyName || "공고"}_${lecture.id}.xlsx`;
         a.click();
         window.URL.revokeObjectURL(url);
         
-        triggerToast("📊 프리미엄 출강 파견 안내서가 성공적으로 생성되어 저장되었습니다!", "success");
+        triggerToast("📊 상세 강의 요청서가 성공적으로 생성되어 저장되었습니다!", "success");
       } catch (error) {
         console.error("Excel generation error:", error);
         triggerToast("❌ 엑셀 파일 생성 중 오류가 발생했습니다.", "error");
@@ -5864,9 +5864,10 @@ export default function App() {
                                   <button
                                     onClick={() => handleDownloadExcel(lecture)}
                                     className="px-2.5 py-1 rounded bg-neutral-950 hover:bg-neutral-800 border border-neutral-800 text-neutral-300 text-[10px] font-bold transition-all cursor-pointer flex items-center gap-1.5"
+                                    title="상세 강의 요청서 엑셀 파일 다운로드"
                                   >
                                     <Download className="w-3 h-3 text-emerald-400" />
-                                    <span>강의 상세 엑셀 다운로드</span>
+                                    <span>상세 강의 요청서</span>
                                   </button>
                                   {getLectureSurveyUrl(lecture) ? (
                                     <button
@@ -7787,8 +7788,9 @@ export default function App() {
                               <button 
                                 onClick={() => handleDownloadExcel(currentModalLec)} 
                                 className="flex-1 px-3 py-2 rounded-lg bg-neutral-900 hover:bg-neutral-850 border border-neutral-800 text-neutral-300 hover:text-white transition-all text-[10px] font-bold flex items-center justify-center gap-1.5 cursor-pointer"
+                                title="상세 강의 요청서 엑셀 파일 다운로드"
                               >
-                                <Download className="w-3 h-3 text-emerald-400" /> 상세 응답 엑셀 다운
+                                <Download className="w-3 h-3 text-emerald-400" /> 상세 강의 요청서
                               </button>
                               {hasSurveyUrl ? (
                                 <button 
