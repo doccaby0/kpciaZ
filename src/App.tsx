@@ -49,6 +49,8 @@ import {
   Wind,
   Palette,
   Calendar,
+  CalendarDays,
+  List,
   Clock,
   Download,
   MapPin,
@@ -59,6 +61,7 @@ import {
   Edit,
   FileSpreadsheet
 } from 'lucide-react';
+import { LectureCalendarView } from './components/LectureCalendarView';
 
 export function getTierRank(tier?: InstructorTier | string | null): number {
   switch (tier) {
@@ -189,6 +192,11 @@ export default function App() {
   const [newLecSurveyUrl, setNewLecSurveyUrl] = useState<string>('');
   const [newLecBudgetOption, setNewLecBudgetOption] = useState<'auto' | 'manual'>('auto');
   const [newLecDirectBudget, setNewLecDirectBudget] = useState<number | ''>(500000);
+  const [newLecCategory, setNewLecCategory] = useState<'dispatch' | 'internal'>('dispatch');
+  const [newLecAssignOption, setNewLecAssignOption] = useState<'open' | 'member' | 'direct'>('open');
+  const [newLecAssignedMemberId, setNewLecAssignedMemberId] = useState<string>('');
+  const [newLecDirectInstructorName, setNewLecDirectInstructorName] = useState<string>('');
+  const [newLecDirectAssistantName, setNewLecDirectAssistantName] = useState<string>('');
 
   // Certificate Modal States
   const [showCertificateModal, setShowCertificateModal] = useState<boolean>(false);
@@ -208,8 +216,8 @@ export default function App() {
   // Admin Lecture Ratings Map (lectureId -> rating value)
   const [adminLectureRatings, setAdminLectureRatings] = useState<Record<string, number>>({});
 
-  // Admin Sub-tab (lectures, settlements, instructors, proposals, programs)
-  const [adminSubTab, setAdminSubTab] = useState<'lectures' | 'settlements' | 'instructors' | 'proposals' | 'programs'>('lectures');
+  // Admin Sub-tab (lectures, calendar, settlements, instructors, proposals, programs)
+  const [adminSubTab, setAdminSubTab] = useState<'lectures' | 'calendar' | 'settlements' | 'instructors' | 'proposals' | 'programs'>('lectures');
   const [adminProgRoyalties, setAdminProgRoyalties] = useState<Record<string, number>>({});
 
   // Instructor Profile Editing (Admin Only)
@@ -289,6 +297,12 @@ export default function App() {
   const [editLecStatus, setEditLecStatus] = useState<'open' | 'assigned' | 'completed'>('open');
   const [editLecManagerName, setEditLecManagerName] = useState<string>('');
   const [editLecManagerPhone, setEditLecManagerPhone] = useState<string>('');
+  const [editLecCategory, setEditLecCategory] = useState<'dispatch' | 'internal'>('dispatch');
+  const [editLecAssignedName, setEditLecAssignedName] = useState<string>('');
+  const [editLecAssistantName, setEditLecAssistantName] = useState<string>('');
+
+  // Control Room Direct Instructor Assignment Input States (map: lectureId -> { isDirect: boolean, directName: string, directAssist: string })
+  const [controlRoomDirectAssign, setControlRoomDirectAssign] = useState<Record<string, { isDirect: boolean; directName: string; directAssist: string }>>({});
 
   // Search & Filters
   const [selectedLectureForModal, setSelectedLectureForModal] = useState<LectureRequest | null>(null);
@@ -1218,11 +1232,32 @@ export default function App() {
     const isProgramApproved = assocProgram && assocProgram.isApproved;
     const computedRoyalty = isProgramApproved ? Math.round((finalBudget * (assocProgram.royaltyRate || 0)) / 100) : 0;
 
+    // Determine assigned instructor if specified
+    let finalAssignedTo: string | undefined = undefined;
+    let finalAssignedName: string | undefined = undefined;
+    let finalAssistantName: string | undefined = undefined;
+    let initialStatus: 'open' | 'assigned' = 'open';
+
+    if (newLecAssignOption === 'member' && newLecAssignedMemberId) {
+      const matchMember = users.find(u => u.uid === newLecAssignedMemberId);
+      if (matchMember) {
+        finalAssignedTo = matchMember.uid;
+        finalAssignedName = matchMember.name;
+        initialStatus = 'assigned';
+      }
+    } else if (newLecAssignOption === 'direct' && newLecDirectInstructorName.trim()) {
+      finalAssignedTo = 'external';
+      finalAssignedName = newLecDirectInstructorName.trim();
+      finalAssistantName = newLecDirectAssistantName.trim() || undefined;
+      initialStatus = 'assigned';
+    }
+
     const newLec: LectureRequest = {
       id: `lect_${Date.now()}`,
       title: cleanTitle,
       companyName: cleanCompany,
       partnerCompany: cleanPartner || undefined,
+      lectureCategory: newLecCategory,
       description: cleanDesc,
       targetTier: newLecTier,
       budget: finalBudget,
@@ -1237,7 +1272,10 @@ export default function App() {
       attendees: newLecAttendees,
       managerName: cleanMName || "인재개발원 담당자",
       managerPhone: cleanMPhone || "010-0000-0000",
-      status: 'open',
+      status: initialStatus,
+      assignedTo: finalAssignedTo,
+      assignedName: finalAssignedName,
+      assistantName: finalAssistantName,
       applicants: [],
       createdAt: new Date().toISOString(),
       mainHours: newLecHours,
@@ -1262,12 +1300,19 @@ export default function App() {
     setControlRoomSearch('');
     setControlRoomPage(1);
 
-    triggerToast(`📢 [${cleanCompany}] '${cleanTitle}' 신규 출강 요청서가 정상 등록되었습니다!`, "success");
+    const typeLabel = newLecCategory === 'internal' ? '자체강의' : '파견강의';
+    const assignLabel = finalAssignedName ? ` (배정강사: ${finalAssignedName})` : '';
+    triggerToast(`📢 [${cleanCompany}] '${cleanTitle}' [${typeLabel}] 신규 출강 요청서가 정상 등록되었습니다!${assignLabel}`, "success");
 
     // Clear Form
     setNewLecTitle('');
     setNewLecCompany('');
     setNewLecPartner('');
+    setNewLecCategory('dispatch');
+    setNewLecAssignOption('open');
+    setNewLecAssignedMemberId('');
+    setNewLecDirectInstructorName('');
+    setNewLecDirectAssistantName('');
     setNewLecDesc('');
     setNewLecLocation('');
     setNewLecManagerName('');
@@ -1293,6 +1338,12 @@ export default function App() {
       setNewLecTitle(parsed.title || '');
       setNewLecCompany(parsed.companyName || '');
       setNewLecPartner(parsed.partnerCompany || '');
+      setNewLecCategory(parsed.lectureCategory || 'dispatch');
+      if (parsed.assignedName) {
+        setNewLecAssignOption('direct');
+        setNewLecDirectInstructorName(parsed.assignedName);
+        setNewLecDirectAssistantName(parsed.assistantName || '');
+      }
       setNewLecDesc(parsed.description || '');
       setNewLecLocation(parsed.location || '');
       setNewLecManagerName(parsed.managerName || '');
@@ -1876,6 +1927,9 @@ export default function App() {
     setEditLecTitle(lecture.title);
     setEditLecCompany(lecture.companyName || '');
     setEditLecPartner(lecture.partnerCompany || '');
+    setEditLecCategory(lecture.lectureCategory || 'dispatch');
+    setEditLecAssignedName(lecture.assignedName || '');
+    setEditLecAssistantName(lecture.assistantName || '');
     setEditLecDesc(lecture.description || '');
     setEditLecTier(lecture.targetTier);
     setEditLecDate(lecture.date);
@@ -1903,6 +1957,10 @@ export default function App() {
       title: editLecTitle,
       companyName: editLecCompany,
       partnerCompany: editLecPartner,
+      lectureCategory: editLecCategory,
+      assignedName: editLecAssignedName.trim() || undefined,
+      assignedTo: editLecAssignedName.trim() ? (editingLecture.assignedTo || 'external') : undefined,
+      assistantName: editLecAssistantName.trim() || undefined,
       description: editLecDesc,
       targetTier: editLecTier,
       date: editLecDate,
@@ -2441,31 +2499,64 @@ export default function App() {
   // --- KPCIA NEW ADVANCED BUSINESS LOGIC HANDLERS ---
 
   // 1. Assign Lecturers to Lecture Request (Admin)
-  const handleAssignLecturers = async (lectureId: string, mainId: string, assistantId?: string) => {
+  const handleAssignLecturers = async (
+    lectureId: string, 
+    mainId: string, 
+    assistantId?: string,
+    directMainName?: string,
+    directAssistName?: string
+  ) => {
     const lect = lectures.find(l => l.id === lectureId);
     if (!lect) return;
 
-    const mainInst = users.find(u => u.uid === mainId);
-    const assistantInst = assistantId ? users.find(u => u.uid === assistantId) : null;
+    let finalAssignedTo: string = mainId;
+    let finalAssignedName: string = '';
+    let finalAssistId: string | undefined = assistantId || undefined;
+    let finalAssistName: string | undefined = undefined;
 
-    if (!mainInst) {
-      triggerToast("주강사를 지정해 주세요.", "error");
-      return;
+    if (mainId === 'DIRECT_INPUT' || directMainName?.trim()) {
+      const cleanName = (directMainName || '').trim();
+      if (!cleanName) {
+        triggerToast("배정할 강사 성함을 직접 입력해 주세요.", "error");
+        return;
+      }
+      finalAssignedTo = 'external';
+      finalAssignedName = cleanName;
+      if (directAssistName?.trim()) {
+        finalAssistId = 'external_assist';
+        finalAssistName = directAssistName.trim();
+      }
+    } else {
+      const mainInst = users.find(u => u.uid === mainId);
+      if (!mainInst) {
+        triggerToast("주강사를 지정하거나 이름을 직접 입력해 주세요.", "error");
+        return;
+      }
+      finalAssignedName = mainInst.name;
+      if (assistantId && assistantId !== 'DIRECT_INPUT') {
+        const assistantInst = users.find(u => u.uid === assistantId);
+        if (assistantInst) {
+          finalAssistName = assistantInst.name;
+        }
+      } else if (directAssistName?.trim()) {
+        finalAssistId = 'external_assist';
+        finalAssistName = directAssistName.trim();
+      }
     }
 
     const updatedLec: LectureRequest = {
       ...lect,
-      assignedTo: mainId,
-      assignedName: mainInst.name,
-      assistantId: assistantId || undefined,
-      assistantName: assistantInst ? assistantInst.name : undefined,
+      assignedTo: finalAssignedTo,
+      assignedName: finalAssignedName,
+      assistantId: finalAssistId,
+      assistantName: finalAssistName,
       status: 'assigned'
     };
 
     const updatedLectures = lectures.map(l => l.id === lectureId ? updatedLec : l);
     setLectures(updatedLectures);
     await StorageService.saveLecture(updatedLec);
-    triggerToast(`🎉 ${mainInst.name} 강사님(주강사) 배정이 완료되었습니다!`, "success");
+    triggerToast(`🎉 ${finalAssignedName} 강사님(주강사) 배정이 완료되었습니다!`, "success");
   };
 
   // 2. Complete Lecture and Distribute Royalties & Mileage (Admin)
@@ -2478,54 +2569,55 @@ export default function App() {
       return;
     }
 
-    const mainId = lect.assignedTo!;
+    const mainId = lect.assignedTo;
     const assistantId = lect.assistantId;
 
-    const mainInst = users.find(u => u.uid === mainId);
+    const mainInst = mainId ? users.find(u => u.uid === mainId) : null;
     const assistantInst = assistantId ? users.find(u => u.uid === assistantId) : null;
 
-    if (!mainInst) return;
+    let updatedUsersList = users;
 
-    // Calculations for settlement payouts
-    // 주강사: (주강사 시간 x 100,000 KRW) / 1000 = 마일리지 (또는 시간당 100 M)
-    const mainHours = lect.mainHours || 3;
-    const mainPayout = mainHours * 100; // 100 M per hour
+    if (mainInst) {
+      // Calculations for settlement payouts
+      const mainHours = lect.mainHours || 3;
+      const mainPayout = mainHours * 100; // 100 M per hour
+
+      // Create main instructor payout tx
+      const mainTx: MileageTransaction = {
+        id: `tx_main_${Date.now()}_1`,
+        userId: mainId,
+        userName: mainInst.name,
+        type: 'lecture_payout',
+        amount: mainPayout,
+        description: `[KPCIA 출강정산] '${lect.title}' 주강사 ${mainHours}시간 정산 지급 (만족도: ${rating.toFixed(1)})`,
+        relatedId: lectureId,
+        createdAt: new Date().toISOString()
+      };
+
+      // Calculate updated average rating for main instructor
+      const mainRatings = mainInst.lectureRatings || [];
+      const updatedMainRatings = [...mainRatings, rating];
+      const avgMainRating = Number((updatedMainRatings.reduce((a, b) => a + b, 0) / updatedMainRatings.length).toFixed(2));
+
+      // Update Main User profile (mileage, counts, and ratings)
+      const updatedMainUser: UserProfile = {
+        ...mainInst,
+        mileage: mainInst.mileage + mainPayout,
+        lectureCount: (mainInst.lectureCount || 0) + 1,
+        lectureRatings: updatedMainRatings,
+        averageRating: avgMainRating,
+        updatedAt: new Date().toISOString()
+      };
+
+      updatedUsersList = users.map(u => u.uid === mainId ? updatedMainUser : u);
+
+      await StorageService.saveUser(updatedMainUser);
+      await StorageService.addTransaction(mainTx);
+    }
 
     // 보조강사: (보조강사 시간 x 50,000 KRW) / 1000 = 마일리지 (또는 시간당 50 M)
     const assistantHours = lect.assistantHours || 0;
     const assistantPayout = assistantHours * 50; // 50 M per hour
-
-    // Create main instructor payout tx
-    const mainTx: MileageTransaction = {
-      id: `tx_main_${Date.now()}_1`,
-      userId: mainId,
-      userName: mainInst.name,
-      type: 'lecture_payout',
-      amount: mainPayout,
-      description: `[KPCIA 출강정산] '${lect.title}' 주강사 ${mainHours}시간 정산 지급 (만족도: ${rating.toFixed(1)})`,
-      relatedId: lectureId,
-      createdAt: new Date().toISOString()
-    };
-
-    // Calculate updated average rating for main instructor
-    const mainRatings = mainInst.lectureRatings || [];
-    const updatedMainRatings = [...mainRatings, rating];
-    const avgMainRating = Number((updatedMainRatings.reduce((a, b) => a + b, 0) / updatedMainRatings.length).toFixed(2));
-
-    // Update Main User profile (mileage, counts, and ratings)
-    const updatedMainUser: UserProfile = {
-      ...mainInst,
-      mileage: mainInst.mileage + mainPayout,
-      lectureCount: (mainInst.lectureCount || 0) + 1,
-      lectureRatings: updatedMainRatings,
-      averageRating: avgMainRating,
-      updatedAt: new Date().toISOString()
-    };
-
-    let updatedUsersList = users.map(u => u.uid === mainId ? updatedMainUser : u);
-
-    await StorageService.saveUser(updatedMainUser);
-    await StorageService.addTransaction(mainTx);
 
     // If there is assistant instructor, pay out mileage
     if (assistantInst && assistantPayout > 0) {
@@ -4776,6 +4868,21 @@ export default function App() {
                 </button>
 
                 <button
+                  onClick={() => setAdminSubTab('calendar')}
+                  className={`px-5 py-3 text-xs font-black transition-all border-b-2 shrink-0 flex items-center gap-1.5 cursor-pointer ${
+                    adminSubTab === 'calendar'
+                      ? 'border-[#D4AF37] text-[#D4AF37] bg-amber-500/5'
+                      : 'border-transparent text-neutral-400 hover:text-neutral-200 hover:bg-neutral-950/40'
+                  }`}
+                >
+                  <CalendarDays className="w-3.5 h-3.5 text-[#D4AF37]" />
+                  <span>📅 출강 일정 캘린더 (달력형 보기)</span>
+                  <span className="px-1.5 py-0.5 rounded-full bg-amber-500/10 text-[#D4AF37] border border-amber-500/20 text-[9px] font-bold">
+                    마스터 전용
+                  </span>
+                </button>
+
+                <button
                   onClick={() => setAdminSubTab('settlements')}
                   className={`px-5 py-3 text-xs font-black transition-all border-b-2 shrink-0 flex items-center gap-1.5 cursor-pointer ${
                     adminSubTab === 'settlements'
@@ -4926,6 +5033,79 @@ export default function App() {
 
                   {lectureRegMode === 'single' ? (
                     <form onSubmit={handleCreateLecture} className="space-y-2 text-xs animate-in fade-in duration-200">
+                      {/* 📌 Lecture Category (파견강의 vs 자체강의) Checkbox / Selector */}
+                      <div className="space-y-1.5 p-2.5 bg-neutral-950/90 rounded-xl border border-neutral-800 shadow-sm">
+                        <div className="flex items-center justify-between">
+                          <label className="text-neutral-300 font-bold flex items-center gap-1.5 text-[11px]">
+                            <span className="p-0.5 rounded bg-blue-500/10 text-blue-400">📌</span>
+                            <span>강의 구분 (파견강의 / 자체강의) *</span>
+                          </label>
+                          <span className={`text-[9.5px] px-2 py-0.5 rounded font-black ${
+                            newLecCategory === 'dispatch'
+                              ? 'bg-blue-500/20 text-blue-300 border border-blue-500/30'
+                              : 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
+                          }`}>
+                            {newLecCategory === 'dispatch' ? '🏢 파견강의 선택됨' : '🏛️ 자체강의 선택됨'}
+                          </span>
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-2">
+                          <button
+                            type="button"
+                            onClick={() => setNewLecCategory('dispatch')}
+                            className={`p-2 rounded-lg border text-left transition-all flex items-center gap-2.5 cursor-pointer ${
+                              newLecCategory === 'dispatch'
+                                ? 'bg-blue-950/50 border-blue-500/70 text-white shadow-sm ring-1 ring-blue-500/40'
+                                : 'bg-neutral-900 border-neutral-800 text-neutral-400 hover:text-neutral-200 hover:border-neutral-700'
+                            }`}
+                          >
+                            <input
+                              type="radio"
+                              name="newLecCategory"
+                              id="cat-dispatch-radio"
+                              checked={newLecCategory === 'dispatch'}
+                              onChange={() => setNewLecCategory('dispatch')}
+                              className="w-4 h-4 text-blue-500 accent-blue-500 cursor-pointer shrink-0"
+                            />
+                            <div className="min-w-0">
+                              <label htmlFor="cat-dispatch-radio" className="font-black text-xs block cursor-pointer text-blue-300">
+                                🏢 파견강의
+                              </label>
+                              <div className="text-[9.5px] text-neutral-400 truncate">
+                                외부 기업/기관/학교 현장 출강
+                              </div>
+                            </div>
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() => setNewLecCategory('internal')}
+                            className={`p-2 rounded-lg border text-left transition-all flex items-center gap-2.5 cursor-pointer ${
+                              newLecCategory === 'internal'
+                                ? 'bg-emerald-950/50 border-emerald-500/70 text-white shadow-sm ring-1 ring-emerald-500/40'
+                                : 'bg-neutral-900 border-neutral-800 text-neutral-400 hover:text-neutral-200 hover:border-neutral-700'
+                            }`}
+                          >
+                            <input
+                              type="radio"
+                              name="newLecCategory"
+                              id="cat-internal-radio"
+                              checked={newLecCategory === 'internal'}
+                              onChange={() => setNewLecCategory('internal')}
+                              className="w-4 h-4 text-emerald-500 accent-emerald-500 cursor-pointer shrink-0"
+                            />
+                            <div className="min-w-0">
+                              <label htmlFor="cat-internal-radio" className="font-black text-xs block cursor-pointer text-emerald-300">
+                                🏛️ 자체강의
+                              </label>
+                              <div className="text-[9.5px] text-neutral-400 truncate">
+                                협회 본부/자체 교육장 주관 교육
+                              </div>
+                            </div>
+                          </button>
+                        </div>
+                      </div>
+
                       <div className="space-y-0.5">
                         <label className="text-neutral-400 font-semibold block text-[11px]">출강 교육 명칭 (Title) *</label>
                         <input
@@ -5234,6 +5414,121 @@ export default function App() {
                         />
                       </div>
 
+                      {/* 👨‍🏫 Instructor Assignment Option (공고 모집 / 소속 협회원 / 외부 강사 직접 입력) */}
+                      <div className="space-y-2 p-2.5 bg-neutral-950/90 rounded-xl border border-neutral-800 shadow-sm">
+                        <div className="flex items-center justify-between border-b border-neutral-850 pb-1.5">
+                          <label className="text-neutral-300 font-bold flex items-center gap-1.5 text-[11px]">
+                            <span className="p-0.5 rounded bg-[#D4AF37]/10 text-[#D4AF37]">👨‍🏫</span>
+                            <span>출강 강사 배정 설정 *</span>
+                          </label>
+                          <span className={`text-[9px] px-1.5 py-0.5 rounded font-black ${
+                            newLecAssignOption === 'direct'
+                              ? 'bg-purple-500/20 text-purple-300 border border-purple-500/30'
+                              : newLecAssignOption === 'member'
+                              ? 'bg-blue-500/20 text-blue-300 border border-blue-500/30'
+                              : 'bg-amber-500/15 text-amber-300 border border-amber-500/30'
+                          }`}>
+                            {newLecAssignOption === 'direct' ? '✍️ 외부 강사 성함 직접 입력' : newLecAssignOption === 'member' ? '👥 소속 협회원 지정' : '📢 미배정 (공고 후 모집)'}
+                          </span>
+                        </div>
+
+                        {/* Assignment Mode 3 Tabs */}
+                        <div className="grid grid-cols-3 gap-1.5 p-1 bg-neutral-900 rounded-lg border border-neutral-800">
+                          <button
+                            type="button"
+                            onClick={() => setNewLecAssignOption('open')}
+                            className={`py-1.5 px-1.5 rounded-md text-[10.5px] font-bold transition-all cursor-pointer flex items-center justify-center gap-1 ${
+                              newLecAssignOption === 'open'
+                                ? 'bg-[#D4AF37] text-neutral-950 shadow-sm font-black'
+                                : 'text-neutral-400 hover:text-white'
+                            }`}
+                          >
+                            <span>📢 미배정 (공고)</span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setNewLecAssignOption('member')}
+                            className={`py-1.5 px-1.5 rounded-md text-[10.5px] font-bold transition-all cursor-pointer flex items-center justify-center gap-1 ${
+                              newLecAssignOption === 'member'
+                                ? 'bg-blue-600 text-white shadow-sm font-black'
+                                : 'text-neutral-400 hover:text-white'
+                            }`}
+                          >
+                            <span>👥 소속 협회원</span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setNewLecAssignOption('direct')}
+                            className={`py-1.5 px-1.5 rounded-md text-[10.5px] font-bold transition-all cursor-pointer flex items-center justify-center gap-1 ${
+                              newLecAssignOption === 'direct'
+                                ? 'bg-purple-600 text-white shadow-sm font-black'
+                                : 'text-neutral-400 hover:text-white'
+                            }`}
+                          >
+                            <span>✍️ 강사명 직접 입력</span>
+                          </button>
+                        </div>
+
+                        {/* Mode Details */}
+                        {newLecAssignOption === 'open' && (
+                          <div className="p-2 rounded-lg bg-neutral-900/50 border border-neutral-800 text-[10px] text-neutral-400 leading-relaxed">
+                            💡 출강 공고 등록 후 소속 강사단의 지원 접수를 받거나, 추후 마스터 통제실에서 강사를 확정 배정합니다.
+                          </div>
+                        )}
+
+                        {newLecAssignOption === 'member' && (
+                          <div className="space-y-1.5 pt-1 animate-in fade-in duration-150">
+                            <label className="text-[10px] text-neutral-400 font-semibold block">배정할 소속 협회원 강사 선택 *</label>
+                            <select
+                              value={newLecAssignedMemberId}
+                              onChange={(e) => setNewLecAssignedMemberId(e.target.value)}
+                              required={newLecAssignOption === 'member'}
+                              className="w-full bg-neutral-900 border border-blue-500/40 rounded-lg px-2.5 py-1.5 text-white text-xs focus:outline-none focus:border-blue-400 cursor-pointer font-bold"
+                            >
+                              <option value="">소속 협회원 선택...</option>
+                              {users.map(u => (
+                                <option key={u.uid} value={u.uid}>{u.name} 강사 ({u.tier}) - {u.email}</option>
+                              ))}
+                            </select>
+                          </div>
+                        )}
+
+                        {newLecAssignOption === 'direct' && (
+                          <div className="space-y-2 pt-1 animate-in fade-in duration-150">
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                              <div className="space-y-0.5">
+                                <label className="text-[10px] text-purple-300 font-bold block">
+                                  주강사 성함 직접 입력 (외부 비회원 등) *
+                                </label>
+                                <input
+                                  type="text"
+                                  placeholder="예) 홍길동 교수 / 김강사"
+                                  value={newLecDirectInstructorName}
+                                  onChange={(e) => setNewLecDirectInstructorName(e.target.value)}
+                                  required={newLecAssignOption === 'direct'}
+                                  className="w-full bg-neutral-900 border border-purple-500/40 rounded-lg px-2.5 py-1.5 text-white font-bold text-xs focus:outline-none focus:border-purple-400"
+                                />
+                              </div>
+                              <div className="space-y-0.5">
+                                <label className="text-[10px] text-neutral-400 font-semibold block">
+                                  보조강사 성함 직접 입력 (선택)
+                                </label>
+                                <input
+                                  type="text"
+                                  placeholder="예) 이보조 강사"
+                                  value={newLecDirectAssistantName}
+                                  onChange={(e) => setNewLecDirectAssistantName(e.target.value)}
+                                  className="w-full bg-neutral-900 border border-neutral-800 rounded-lg px-2.5 py-1.5 text-white text-xs focus:outline-none focus:border-[#D4AF37]"
+                                />
+                              </div>
+                            </div>
+                            <p className="text-[9.5px] text-neutral-400 leading-tight">
+                              💡 협회 회원이 아닌 외부 강사일 경우 성함을 직접 입력하시면 배정 완료 상태로 등록되며 출강 대장에 안전하게 보존됩니다.
+                            </p>
+                          </div>
+                        )}
+                      </div>
+
                       {/* 💰 Lecture Fee Calculation Option Container */}
                       <div className="space-y-2 p-2.5 bg-neutral-950/90 rounded-xl border border-neutral-800 shadow-sm">
                         <div className="flex items-center justify-between border-b border-neutral-850 pb-1.5">
@@ -5452,6 +5747,15 @@ export default function App() {
                       <div className="flex items-center gap-2">
                         <button
                           type="button"
+                          onClick={() => setAdminSubTab('calendar')}
+                          className="px-2 py-0.5 text-[8.5px] text-[#D4AF37] hover:text-amber-200 font-bold rounded bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 cursor-pointer transition-all duration-200 flex items-center gap-1"
+                          title="출강 일정을 달력형 캘린더 화면으로 전환하여 확인합니다."
+                        >
+                          <CalendarDays className="w-2.5 h-2.5 text-[#D4AF37]" />
+                          <span>📅 달력형 보기</span>
+                        </button>
+                        <button
+                          type="button"
                           onClick={handleResetLectureData}
                           className="px-2 py-0.5 text-[8.5px] text-red-400 hover:text-red-300 font-bold rounded bg-red-950/30 hover:bg-red-900/40 border border-red-900/30 cursor-pointer transition-all duration-200"
                           title="출강 매칭 공고 데이터를 초기 상태로 복원합니다."
@@ -5608,6 +5912,14 @@ export default function App() {
                               <div className="flex justify-between items-start gap-3">
                                 <div>
                                   <div className="flex items-center gap-1.5 flex-wrap">
+                                    {/* Category badge */}
+                                    <span className={`text-[8.5px] font-black px-1.5 py-0.5 rounded border ${
+                                      lecture.lectureCategory === 'internal'
+                                        ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30'
+                                        : 'bg-blue-500/20 text-blue-300 border-blue-500/30'
+                                    }`}>
+                                      {lecture.lectureCategory === 'internal' ? '🏛️ 자체강의' : '🏢 파견강의'}
+                                    </span>
                                     {isRecentlyCreated && (
                                       <span className="text-[8.5px] text-amber-300 font-black bg-amber-500/20 border border-amber-500/40 px-2 py-0.5 rounded-full flex items-center gap-1 shadow-sm">
                                         <Sparkles className="w-2.5 h-2.5 text-amber-400" />
@@ -5618,6 +5930,11 @@ export default function App() {
                                     {lecture.partnerCompany && (
                                       <span className="text-[9px] text-[#D4AF37] border border-[#D4AF37]/30 bg-[#D4AF37]/5 px-1 rounded font-extrabold flex items-center gap-0.5">
                                         🤝 협력사: {lecture.partnerCompany}
+                                      </span>
+                                    )}
+                                    {lecture.assignedName && (
+                                      <span className="text-[9px] text-purple-300 bg-purple-500/10 border border-purple-500/20 px-1.5 py-0.5 rounded font-bold">
+                                        👤 {lecture.assignedName}{lecture.assignedTo === 'external' ? ' (외부강사)' : ''}
                                       </span>
                                     )}
                                   </div>
@@ -5689,49 +6006,131 @@ export default function App() {
 
                               {/* Assignment & Complete Actions */}
                               {lecture.status === 'open' && (
-                                <div className="flex flex-col md:flex-row gap-3 items-end pt-2 border-t border-neutral-800/60">
-                                  <div className="grid grid-cols-2 gap-3 w-full">
-                                    <div className="space-y-1">
-                                      <label className="text-[10px] text-neutral-400 font-semibold block">주강사 최종 배정 *</label>
-                                      <select 
-                                        id={`admin-assign-main-master-${lecture.id}`}
-                                        className="w-full bg-neutral-950 border border-neutral-800 rounded-lg px-2 py-1.5 text-[11px] text-white focus:outline-none focus:border-[#D4AF37] cursor-pointer font-bold"
-                                      >
-                                        <option value="">주강사 선택...</option>
-                                        {users.map(u => (
-                                          <option key={u.uid} value={u.uid}>{u.name} 강사 ({u.tier})</option>
-                                        ))}
-                                      </select>
-                                    </div>
-
-                                    <div className="space-y-1">
-                                      <label className="text-[10px] text-neutral-400 font-semibold block">보조강사 배정 (선택)</label>
-                                      <select 
-                                        id={`admin-assign-assist-master-${lecture.id}`}
-                                        className="w-full bg-neutral-950 border border-neutral-800 rounded-lg px-2 py-1.5 text-[11px] text-white focus:outline-none focus:border-[#D4AF37] cursor-pointer"
-                                      >
-                                        <option value="">보조강사 선택...</option>
-                                        {users.map(u => (
-                                          <option key={u.uid} value={u.uid}>{u.name} 강사 ({u.tier})</option>
-                                        ))}
-                                      </select>
-                                    </div>
+                                <div className="pt-2 border-t border-neutral-800/60 space-y-2">
+                                  <div className="flex items-center justify-between">
+                                    <span className="text-[10px] font-bold text-neutral-400">
+                                      {controlRoomDirectAssign[lecture.id]?.isDirect ? '✍️ 외부 강사 성함 직접 입력 배정' : '👥 소속 협회원 지정 배정'}
+                                    </span>
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        setControlRoomDirectAssign(prev => ({
+                                          ...prev,
+                                          [lecture.id]: {
+                                            isDirect: !prev[lecture.id]?.isDirect,
+                                            directName: prev[lecture.id]?.directName || '',
+                                            directAssist: prev[lecture.id]?.directAssist || ''
+                                          }
+                                        }));
+                                      }}
+                                      className="text-[9.5px] px-2 py-0.5 rounded border border-[#D4AF37]/30 bg-[#D4AF37]/10 text-[#D4AF37] hover:bg-[#D4AF37]/20 font-bold transition-all cursor-pointer flex items-center gap-1"
+                                    >
+                                      {controlRoomDirectAssign[lecture.id]?.isDirect ? '👥 소속 협회원 목록에서 선택하기' : '✍️ 비회원 외부 강사 직접 입력하기'}
+                                    </button>
                                   </div>
 
-                                  <button
-                                    onClick={() => {
-                                      const mainSelect = document.getElementById(`admin-assign-main-master-${lecture.id}`) as HTMLSelectElement;
-                                      const assistSelect = document.getElementById(`admin-assign-assist-master-${lecture.id}`) as HTMLSelectElement;
-                                      if (mainSelect && mainSelect.value) {
-                                        handleAssignLecturers(lecture.id, mainSelect.value, assistSelect?.value);
-                                      } else {
-                                        triggerToast("주강사를 지정해 주세요.", "error");
-                                      }
-                                    }}
-                                    className="px-3.5 py-1.5 rounded-lg bg-[#D4AF37] hover:brightness-110 text-neutral-950 text-[11px] font-black transition-all cursor-pointer shrink-0"
-                                  >
-                                    배정 승인 완료
-                                  </button>
+                                  {controlRoomDirectAssign[lecture.id]?.isDirect ? (
+                                    <div className="flex flex-col md:flex-row gap-3 items-end bg-purple-950/20 p-2.5 rounded-xl border border-purple-500/30">
+                                      <div className="grid grid-cols-2 gap-3 w-full">
+                                        <div className="space-y-1">
+                                          <label className="text-[10px] text-purple-300 font-bold block">주강사 성함 직접 입력 (외부 비회원) *</label>
+                                          <input
+                                            type="text"
+                                            placeholder="예) 홍길동 교수 / 김강사"
+                                            value={controlRoomDirectAssign[lecture.id]?.directName || ''}
+                                            onChange={(e) => {
+                                              const val = e.target.value;
+                                              setControlRoomDirectAssign(prev => ({
+                                                ...prev,
+                                                [lecture.id]: {
+                                                  ...(prev[lecture.id] || { isDirect: true, directName: '', directAssist: '' }),
+                                                  directName: val
+                                                }
+                                              }));
+                                            }}
+                                            className="w-full bg-neutral-950 border border-purple-500/50 rounded-lg px-2.5 py-1.5 text-[11px] text-white focus:outline-none focus:border-purple-400 font-bold"
+                                          />
+                                        </div>
+                                        <div className="space-y-1">
+                                          <label className="text-[10px] text-neutral-400 font-semibold block">보조강사 성함 직접 입력 (선택)</label>
+                                          <input
+                                            type="text"
+                                            placeholder="예) 이보조 강사"
+                                            value={controlRoomDirectAssign[lecture.id]?.directAssist || ''}
+                                            onChange={(e) => {
+                                              const val = e.target.value;
+                                              setControlRoomDirectAssign(prev => ({
+                                                ...prev,
+                                                [lecture.id]: {
+                                                  ...(prev[lecture.id] || { isDirect: true, directName: '', directAssist: '' }),
+                                                  directAssist: val
+                                                }
+                                              }));
+                                            }}
+                                            className="w-full bg-neutral-950 border border-neutral-800 rounded-lg px-2.5 py-1.5 text-[11px] text-white focus:outline-none focus:border-[#D4AF37]"
+                                          />
+                                        </div>
+                                      </div>
+                                      <button
+                                        onClick={() => {
+                                          const entry = controlRoomDirectAssign[lecture.id];
+                                          if (!entry?.directName?.trim()) {
+                                            triggerToast("배정할 주강사 성함을 입력해 주세요.", "error");
+                                            return;
+                                          }
+                                          handleAssignLecturers(lecture.id, 'DIRECT_INPUT', undefined, entry.directName, entry.directAssist);
+                                        }}
+                                        className="px-3.5 py-1.5 rounded-lg bg-gradient-to-r from-purple-600 to-[#D4AF37] hover:brightness-110 text-neutral-950 text-[11px] font-black transition-all cursor-pointer shrink-0 shadow-sm"
+                                      >
+                                        외부 강사 배정 승인
+                                      </button>
+                                    </div>
+                                  ) : (
+                                    <div className="flex flex-col md:flex-row gap-3 items-end">
+                                      <div className="grid grid-cols-2 gap-3 w-full">
+                                        <div className="space-y-1">
+                                          <label className="text-[10px] text-neutral-400 font-semibold block">주강사 최종 배정 *</label>
+                                          <select 
+                                            id={`admin-assign-main-master-${lecture.id}`}
+                                            className="w-full bg-neutral-950 border border-neutral-800 rounded-lg px-2 py-1.5 text-[11px] text-white focus:outline-none focus:border-[#D4AF37] cursor-pointer font-bold"
+                                          >
+                                            <option value="">주강사 선택...</option>
+                                            {users.map(u => (
+                                              <option key={u.uid} value={u.uid}>{u.name} 강사 ({u.tier})</option>
+                                            ))}
+                                          </select>
+                                        </div>
+
+                                        <div className="space-y-1">
+                                          <label className="text-[10px] text-neutral-400 font-semibold block">보조강사 배정 (선택)</label>
+                                          <select 
+                                            id={`admin-assign-assist-master-${lecture.id}`}
+                                            className="w-full bg-neutral-950 border border-neutral-800 rounded-lg px-2 py-1.5 text-[11px] text-white focus:outline-none focus:border-[#D4AF37] cursor-pointer"
+                                          >
+                                            <option value="">보조강사 선택...</option>
+                                            {users.map(u => (
+                                              <option key={u.uid} value={u.uid}>{u.name} 강사 ({u.tier})</option>
+                                            ))}
+                                          </select>
+                                        </div>
+                                      </div>
+
+                                      <button
+                                        onClick={() => {
+                                          const mainSelect = document.getElementById(`admin-assign-main-master-${lecture.id}`) as HTMLSelectElement;
+                                          const assistSelect = document.getElementById(`admin-assign-assist-master-${lecture.id}`) as HTMLSelectElement;
+                                          if (mainSelect && mainSelect.value) {
+                                            handleAssignLecturers(lecture.id, mainSelect.value, assistSelect?.value);
+                                          } else {
+                                            triggerToast("주강사를 지정해 주세요.", "error");
+                                          }
+                                        }}
+                                        className="px-3.5 py-1.5 rounded-lg bg-[#D4AF37] hover:brightness-110 text-neutral-950 text-[11px] font-black transition-all cursor-pointer shrink-0"
+                                      >
+                                        배정 승인 완료
+                                      </button>
+                                    </div>
+                                  )}
                                 </div>
                               )}
 
@@ -5902,6 +6301,46 @@ export default function App() {
                   </div>
 
                 </div>
+              </div>
+            )}
+
+            {/* 👑 ADMIN MASTER CALENDAR SUB-TAB (달력형 보기 - 관리자 마스터 전용) */}
+            {adminSubTab === 'calendar' && (
+              <div className="mt-6 space-y-4 animate-in fade-in duration-200">
+                <div className="p-4 rounded-2xl bg-[#0e0e10] border border-neutral-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-xl">
+                  <div>
+                    <h3 className="text-sm md:text-base font-black text-white flex items-center gap-2">
+                      <span className="text-[#D4AF37]">👑</span>
+                      <span>KPCIA 마스터 관제실 : 출강 스케줄 캘린더 (달력형 보기)</span>
+                      <span className="text-[10px] text-amber-400 font-bold px-2 py-0.5 rounded bg-amber-500/10 border border-amber-500/20">
+                        관리자 마스터 전용
+                      </span>
+                    </h3>
+                    <p className="text-xs text-neutral-400 mt-1">
+                      월별 등록된 전체 출강 요청서 및 매칭 배정 현황을 달력에서 한눈에 관제하고 일자별 상세 일정을 확인합니다.
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setAdminSubTab('lectures')}
+                      className="px-3 py-1.5 rounded-lg bg-neutral-900 border border-neutral-800 hover:border-neutral-700 text-neutral-300 hover:text-white text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5"
+                    >
+                      <List className="w-3.5 h-3.5 text-[#D4AF37]" />
+                      <span>출강 통제실(목록)로 전환</span>
+                    </button>
+                  </div>
+                </div>
+
+                <LectureCalendarView
+                  lectures={lectures}
+                  allLectures={lectures}
+                  currentUser={currentUser}
+                  onSelectLecture={setSelectedLectureForModal}
+                  getTierRank={getTierRank}
+                  filterStatus={filterLecStatus}
+                  onFilterStatusChange={setFilterLecStatus}
+                />
               </div>
             )}
 
@@ -7579,25 +8018,6 @@ export default function App() {
                         </div>
                       </div>
                     </div>
-
-                    {/* Assigned instructors information */}
-                    {(currentModalLec.assignedName || currentModalLec.assistantName) && (
-                      <div className="space-y-1.5">
-                        <span className="text-[9px] text-neutral-500 font-black uppercase tracking-wider block">👥 배정 강사 정보</span>
-                        <div className="flex flex-wrap gap-1.5">
-                          {currentModalLec.assignedName && (
-                            <span className="inline-flex items-center gap-1 bg-blue-500/10 text-blue-400 px-2.5 py-1 rounded-lg text-[10px] font-bold border border-blue-500/15">
-                              주강사: {currentModalLec.assignedName}
-                            </span>
-                          )}
-                          {currentModalLec.assistantName && (
-                            <span className="inline-flex items-center gap-1 bg-purple-500/10 text-purple-400 px-2.5 py-1 rounded-lg text-[10px] font-bold border border-purple-500/15">
-                              보조강사: {currentModalLec.assistantName}
-                            </span>
-                          )}
-                        </div>
-                      </div>
-                    )}
                   </div>
 
                   {/* Right Column: Detailed Curriculum Description & PDF/QR management tools */}
@@ -9969,6 +10389,67 @@ export default function App() {
 
             {/* Edit Form */}
             <div className="p-6 space-y-4 max-h-[80vh] overflow-y-auto">
+              {/* 📌 Lecture Category Radio/Check Selection */}
+              <div className="space-y-1.5 p-3 bg-neutral-950/80 rounded-xl border border-neutral-800">
+                <div className="flex items-center justify-between">
+                  <label className="text-neutral-300 font-bold flex items-center gap-1.5 text-xs">
+                    <span className="p-0.5 rounded bg-blue-500/10 text-blue-400">📌</span>
+                    <span>강의 구분 (파견강의 / 자체강의) *</span>
+                  </label>
+                  <span className={`text-[9.5px] px-2 py-0.5 rounded font-black ${
+                    editLecCategory === 'dispatch'
+                      ? 'bg-blue-500/20 text-blue-300 border border-blue-500/30'
+                      : 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
+                  }`}>
+                    {editLecCategory === 'dispatch' ? '🏢 파견강의 선택됨' : '🏛️ 자체강의 선택됨'}
+                  </span>
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setEditLecCategory('dispatch')}
+                    className={`p-2.5 rounded-lg border text-left transition-all flex items-center gap-2 cursor-pointer ${
+                      editLecCategory === 'dispatch'
+                        ? 'bg-blue-950/40 border-blue-500/70 text-white shadow-sm ring-1 ring-blue-500/30'
+                        : 'bg-neutral-900 border-neutral-800 text-neutral-400 hover:text-neutral-200'
+                    }`}
+                  >
+                    <input
+                      type="radio"
+                      name="editLecCategory"
+                      checked={editLecCategory === 'dispatch'}
+                      onChange={() => setEditLecCategory('dispatch')}
+                      className="w-4 h-4 text-blue-500 accent-blue-500 cursor-pointer"
+                    />
+                    <div>
+                      <div className="font-bold text-xs text-blue-300">🏢 파견강의</div>
+                      <div className="text-[9.5px] text-neutral-400">외부 기관/기업/학교 출강</div>
+                    </div>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setEditLecCategory('internal')}
+                    className={`p-2.5 rounded-lg border text-left transition-all flex items-center gap-2 cursor-pointer ${
+                      editLecCategory === 'internal'
+                        ? 'bg-emerald-950/40 border-emerald-500/70 text-white shadow-sm ring-1 ring-emerald-500/30'
+                        : 'bg-neutral-900 border-neutral-800 text-neutral-400 hover:text-neutral-200'
+                    }`}
+                  >
+                    <input
+                      type="radio"
+                      name="editLecCategory"
+                      checked={editLecCategory === 'internal'}
+                      onChange={() => setEditLecCategory('internal')}
+                      className="w-4 h-4 text-emerald-500 accent-emerald-500 cursor-pointer"
+                    />
+                    <div>
+                      <div className="font-bold text-xs text-emerald-300">🏛️ 자체강의</div>
+                      <div className="text-[9.5px] text-neutral-400">협회 본부/자체 교육장 주관</div>
+                    </div>
+                  </button>
+                </div>
+              </div>
+
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 
                 <div className="space-y-1 text-left">
@@ -10153,6 +10634,46 @@ export default function App() {
                     placeholder="예) https://forms.gle/..."
                     className="w-full bg-neutral-950 border border-neutral-800 rounded-lg px-2.5 py-2 text-white focus:outline-none focus:border-[#D4AF37]"
                   />
+                </div>
+
+                {/* ✍️ Direct Instructor Assignment Inputs in Edit Modal */}
+                <div className="space-y-2 text-left md:col-span-2 p-3 bg-neutral-950/80 border border-neutral-800 rounded-xl">
+                  <div className="flex items-center justify-between">
+                    <label className="text-neutral-300 font-bold text-xs flex items-center gap-1.5">
+                      <span className="p-0.5 rounded bg-purple-500/10 text-purple-400">✍️</span>
+                      <span>배정 강사 성함 직접 입력 (협회원 또는 외부 비회원 강사)</span>
+                    </label>
+                    {editLecAssignedName && (
+                      <span className="text-[10px] text-[#D4AF37] font-bold bg-[#D4AF37]/10 border border-[#D4AF37]/20 px-2 py-0.5 rounded">
+                        현재: {editLecAssignedName}
+                      </span>
+                    )}
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    <div>
+                      <span className="text-[10px] text-purple-300 font-semibold block mb-1">주강사 성함 (직접 입력 가능)</span>
+                      <input
+                        type="text"
+                        placeholder="예) 홍길동 강사 / 김교수"
+                        value={editLecAssignedName}
+                        onChange={(e) => setEditLecAssignedName(e.target.value)}
+                        className="w-full bg-neutral-900 border border-purple-500/40 rounded-lg px-2.5 py-1.5 text-white focus:outline-none focus:border-purple-400 text-xs font-bold"
+                      />
+                    </div>
+                    <div>
+                      <span className="text-[10px] text-neutral-400 font-semibold block mb-1">보조강사 성함 (직접 입력 가능)</span>
+                      <input
+                        type="text"
+                        placeholder="예) 이보조 강사 (선택)"
+                        value={editLecAssistantName}
+                        onChange={(e) => setEditLecAssistantName(e.target.value)}
+                        className="w-full bg-neutral-900 border border-neutral-800 rounded-lg px-2.5 py-1.5 text-white focus:outline-none focus:border-[#D4AF37] text-xs"
+                      />
+                    </div>
+                  </div>
+                  <p className="text-[9.5px] text-neutral-500">
+                    💡 협회원이 아닌 외부 강사일 경우 성함을 직접 입력하시면 강사명으로 정산 및 출강 내역이 안전하게 기록됩니다.
+                  </p>
                 </div>
 
                 <div className="space-y-1 text-left md:col-span-2">

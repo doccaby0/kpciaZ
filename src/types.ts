@@ -70,6 +70,7 @@ export interface LectureRequest {
   title: string;
   companyName?: string; // Company / Institution Name
   partnerCompany?: string; // Partner Company Name
+  lectureCategory?: 'dispatch' | 'internal'; // 'dispatch': 파견강의, 'internal': 자체강의
   description: string;
   targetTier: InstructorTier; // Minimum tier required
   budget: number; // Lecture fee in KRW
